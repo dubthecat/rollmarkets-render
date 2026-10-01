@@ -11,7 +11,13 @@ tails() { for f in render.log gpu.log glx.log game.log stk.log xonsrv.log xoncl.
 logpump() { while true; do sleep 20; report log "$(jq -cn --arg id "$MATCH_ID" --arg arena "$ARENA" --arg game "$GAME" --arg tail "$(tails 1200)" '{matchId:$id,arena:$arena,game:$game,tail:$tail}')"; done; }
 # runners are fetched fresh from the repo at start (iterate without rebuilding the image); RUNNER_RAW="" disables
 : "${RUNNER_RAW:=https://raw.githubusercontent.com/dubthecat/rollmarkets-render/main}"
-if [ -n "$RUNNER_RAW" ] && [ "$GAME" != test ]; then curl -fsSL "$RUNNER_RAW/games/$GAME.sh?$(date +%s)" -o /games/$GAME.sh && chmod +x /games/$GAME.sh && log "runner fetched from $RUNNER_RAW" || log "runner fetch failed, using the image copy"; fi
+fetch_runner() {   # the raw CDN caches for minutes; the contents API is not cached (60 requests/h anonymous is plenty), raw is the fallback
+  local f=/games/$GAME.sh
+  if curl -fsSL -m 20 -H 'Accept: application/vnd.github.raw' "https://api.github.com/repos/dubthecat/rollmarkets-render/contents/games/$GAME.sh?ref=main" -o $f.new && head -1 $f.new | grep -q '^#!'; then mv $f.new $f; log "runner fetched via the GitHub API ($(md5sum $f | cut -c1-8))"; return 0; fi
+  if curl -fsSL -m 20 "$RUNNER_RAW/games/$GAME.sh?$(date +%s)" -o $f.new && head -1 $f.new | grep -q '^#!'; then mv $f.new $f; log "runner fetched from $RUNNER_RAW ($(md5sum $f | cut -c1-8))"; return 0; fi
+  rm -f $f.new; log "runner fetch failed, using the image copy ($(md5sum $f | cut -c1-8))"
+}
+if [ -n "$RUNNER_RAW" ] && [ "$GAME" != test ]; then fetch_runner; chmod +x /games/$GAME.sh; fi
 logpump & LOGPUMP=$!
 finish() { local code=${1:-0}; report log "$(jq -cn --arg id "$MATCH_ID" --arg arena "$ARENA" --arg game "$GAME" --arg tail "$(tails 2500)" '{matchId:$id,arena:$arena,game:$game,tail:$tail,final:true}')"; kill $LOGPUMP 2>/dev/null; exit $code; }
 trap 'finish 143' TERM INT
