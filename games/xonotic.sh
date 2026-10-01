@@ -14,7 +14,7 @@ export RUN
 { echo "caps=${NVIDIA_DRIVER_CAPABILITIES:-} vgl=${VGL_DISPLAY:-} RUN=${RUN:-}"; ls /dev/nvidia* 2>/dev/null | tr "\n" " "; echo; cat $D/x.log; } > $D/gpu.log 2>&1
 xstate() { echo "xvfb alive: $(pgrep -c Xvfb) · xdpyinfo: $(xdpyinfo -display :99 >/dev/null 2>&1 && echo ok || echo FAIL) · xvfb.log tail: $(tail -c 200 $D/xvfb.log 2>/dev/null | tr "\n" " ")"; }
 PLAYERS=${PLAYERS:-'[{"name":"Coach aggressive","team":"red","skill":7},{"name":"Coach tactical","team":"blue","skill":7}]'}
-MAP=${MAP:-afterslime}; FRAGS=${FRAGS:-20}; TLIMIT=${TLIMIT:-5}; BOTS=${BOTS:-6}   # the map must list "gametype tdm" in its mapinfo (dance is CTF-only: the server silently switched modes)
+MAP=${MAP:-afterslime}; FRAGS=${FRAGS:-25}; TLIMIT=${TLIMIT:-4}; BOTS=${BOTS:-6}   # the map must list "gametype tdm" in its mapinfo (dance is CTF-only: the server silently switched modes)
 XON=/opt/Xonotic
 echo "match: map=$MAP fraglimit=$FRAGS timelimit=${TLIMIT}m bots=$BOTS"; echo "--- gpu diag"; cat $D/gpu.log; echo "---"
 ls $XON | head -20 >$D/xon-ls.log 2>&1
@@ -31,6 +31,10 @@ skill 7
 minplayers 0
 fraglimit $FRAGS
 timelimit $TLIMIT
+fraglimit_override $FRAGS
+timelimit_override $TLIMIT
+leadlimit_override 0
+g_warmup 0
 sv_vote_commands ""
 sv_autodemo 0
 g_warmup 0
@@ -59,10 +63,10 @@ defer 27 "-attack"
 connect 127.0.0.1
 CFG
 echo "X before: $(xstate)"
-timeout $((TLIMIT*60+120)) $RUN $XON/xonotic-linux64-glx -basedir $XON -userdir /work/xonc -nosound -window -width $W -height $H +exec spect.cfg >$D/xoncl.log 2>&1 &
+timeout $((TLIMIT*60+180)) $RUN $XON/xonotic-linux64-glx -basedir $XON -userdir /work/xonc -nosound -window -width $W -height $H +exec spect.cfg >$D/xoncl.log 2>&1 &
 CL=$!
 # wait for the match to end (eventlog ":end"), or for the server to die
-for i in $(seq 1 $((TLIMIT*60+90))); do grep -q "^:end" $D/xonsrv.log 2>/dev/null && { sleep 5; break; }; kill -0 $SRV 2>/dev/null || break; sleep 1; done
+for i in $(seq 1 $((TLIMIT*60+150))); do grep -q "^:end" $D/xonsrv.log 2>/dev/null && { sleep 5; break; }; kill -0 $SRV 2>/dev/null || break; sleep 1; done
 echo "X after: $(xstate)"
 kill $CL 2>/dev/null; kill $SRV 2>/dev/null; sleep 1
 echo "--- xonsrv.log tail"; tail -40 $D/xonsrv.log; echo "--- xoncl.log tail"; tail -20 $D/xoncl.log
