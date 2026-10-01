@@ -1,24 +1,94 @@
 #!/usr/bin/env bash
-# Two AI teams on a random map, played by hwengine driven through its frontend protocol over stdin;
-# the engine records a demo and --stats-only style output gives the winner. Best effort: the
-# protocol is version-sensitive (Hedgewars 1.0.x). $PLAYERS: [{name, level}] (AI level 1 strong … 5 weak)
+# Two AI teams on a random map. hwengine only plays a game when a FRONTEND feeds it the game config
+# over its IPC socket (engine started with --internal --port N connects to 127.0.0.1:N; every message is
+# one length byte + text). A tiny Python frontend below listens, sends the config when the engine asks
+# ("C"), answers its pings ("?" → "!"), collects the end-of-game stats ("i…" messages) and stops at "q".
+# $PLAYERS: [{name, level}] (AI level 1 strong … 5 weak)
 set -uo pipefail
 export PATH="$PATH:/usr/games:/usr/local/games"
-# an empty player list means "use the defaults"
 [ -z "${PLAYERS:-}" ] || [ "${PLAYERS}" = "[]" ] && unset PLAYERS
-# GPU diagnostics once per run
-{ echo "caps=${NVIDIA_DRIVER_CAPABILITIES:-} vgl=${VGL_DISPLAY:-} RUN=${RUN:-}"; ls /dev/nvidia* 2>/dev/null | tr '\n' ' '; echo; ls /usr/lib/x86_64-linux-gnu/libnvidia-egl* /usr/share/glvnd/egl_vendor.d/ 2>/dev/null | tr '\n' ' '; echo; cat /work/logs/glx.log 2>/dev/null | head -5; } >/work/logs/gpu.log 2>&1
+{ echo "caps=${NVIDIA_DRIVER_CAPABILITIES:-} vgl=${VGL_DISPLAY:-} RUN=${RUN:-}"; ls /dev/nvidia* 2>/dev/null | tr '\n' ' '; echo; grep -E "renderer|version" /work/logs/glx.log 2>/dev/null | head -4; } >/work/logs/gpu.log 2>&1
 PLAYERS=${PLAYERS:-'[{"name":"Hog bot rookie","level":4},{"name":"Hog bot veteran","level":2}]'}
 SEED=${SEED:-$(head -c 8 /dev/urandom | od -An -tx1 | tr -d ' \n')}
-A=$(echo "$PLAYERS" | jq -r '.[0].name'); AL=$(echo "$PLAYERS" | jq -r '.[0].level'); B=$(echo "$PLAYERS" | jq -r '.[1].name'); BL=$(echo "$PLAYERS" | jq -r '.[1].level')
+HOGS=${HOGS:-3}; TURN_MS=${TURN_MS:-25000}; GAME_S=${GAME_S:-780}
+export PLAYERS SEED HOGS TURN_MS GAME_S W H RUN
+echo "match: teams=$(echo "$PLAYERS" | jq -r '[.[].name] | join(" vs ")') hogs=$HOGS turn=${TURN_MS}ms seed=$SEED"; echo "--- gpu diag"; cat /work/logs/gpu.log; echo "---"
 mkdir -p /work/hw
-cfg() { printf '%s\n' "$@"; }
-# the frontend protocol: each line is a command; teams with 3 hogs each, default ammo, 30 s turns, sudden death at 15 turns
-{ cfg "TL" "eseed {$SEED}" "e\$gmflags 0" "e\$turntime 30000" "e\$sd_turns 15" "e\$casefreq 5" "e\$minestime 3000" "e\$minesnum 4" "e\$explosives 2" "etheme Nature" "escript Normal.lua" "e\$template_filter 0" "e\$mapgen 0" "e\$maze_size 0" "e\$feature_size 12" \
-  "eaddteam 11111111111111111111111111111111 $AL $A" "erdriveteam $A" "eammloadt 9391929422199121032135111131121010012110104" "eammprob 0405040541600101021002020000011002000400010" "eammdelay 0000000000000002055000000040070000000020000" "eammreinf 1311110312111111102111011110000111111111111" "eammstore" \
-  "eaddhh $AL 100 A1" "ehat NoHat" "eaddhh $AL 100 A2" "ehat NoHat" "eaddhh $AL 100 A3" "ehat NoHat" \
-  "eaddteam 22222222222222222222222222222222 $BL $B" "erdriveteam $B" "eammloadt 9391929422199121032135111131121010012110104" "eammprob 0405040541600101021002020000011002000400010" "eammdelay 0000000000000002055000000040070000000020000" "eammreinf 1311110312111111102111011110000111111111111" "eammstore" \
-  "eaddhh $BL 100 B1" "ehat NoHat" "eaddhh $BL 100 B2" "ehat NoHat" "eaddhh $BL 100 B3" "ehat NoHat" "!"; sleep 900; } | \
-timeout 900 $RUN hwengine --internal --port 0 --prefix /usr/share/games/hedgewars/Data --user-prefix /work/hw --fullscreen-width $W --fullscreen-height $H --width $W --height $H --nosound --nomusic --nodampen --stats-only --no-teamtag 2>&1 | tee /work/logs/hw.log | tail -40
-WIN=$(grep -oE "(WINS|wins) *: *.*" /work/logs/hw.log | head -1 | sed 's/.*: *//')
-echo "RESULT $(jq -cn --arg w "${WIN:-}" --arg a "$A" --arg b "$B" '{game:"hedgewars",winner:(if ($w|length)>0 then $w else null end),teams:[$a,$b],ok:(($w|length)>0)}')"
+DATA=/usr/share/games/hedgewars/Data; [ -d $DATA ] || DATA=/usr/share/hedgewars/Data
+hwengine --help >/work/logs/hw-help.log 2>&1 || true
+cat > /work/hwfront.py <<'PY'
+import json, os, socket, subprocess, sys, time, shlex
+players = json.loads(os.environ['PLAYERS']); hogs = int(os.environ.get('HOGS', '3')); turn = int(os.environ.get('TURN_MS', '25000'))
+seed = os.environ['SEED']; W = os.environ.get('W', '960'); H = os.environ.get('H', '540'); game_s = int(os.environ.get('GAME_S', '780'))
+run = shlex.split(os.environ.get('RUN', '')); data = sys.argv[1]
+srv = socket.socket(); srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); srv.bind(('127.0.0.1', 0)); srv.listen(1); port = srv.getsockname()[1]
+log = open('/work/logs/hwfront.log', 'a')
+def L(*a): print(time.strftime('%H:%M:%S'), *a, file=log, flush=True)
+cmd = run + ['hwengine', '--internal', '--port', str(port), '--prefix', data, '--user-prefix', '/work/hw', '--width', W, '--height', H, '--nosound', '--nomusic', '--nodampen', '--no-teamtag', '--locale', 'en.txt']
+L('spawn', ' '.join(cmd))
+eng = subprocess.Popen(cmd, stdout=open('/work/logs/hw.log', 'a'), stderr=subprocess.STDOUT)
+srv.settimeout(90)
+try: conn, _ = srv.accept()
+except Exception as e: L('engine never connected', e); eng.kill(); print('RESULT ' + json.dumps({'game': 'hedgewars', 'winner': None, 'ok': False, 'error': 'engine never connected'})); sys.exit(0)
+L('engine connected')
+def send(*msgs):
+    buf = b''
+    for m in msgs: b = m.encode('utf-8'); buf += bytes([len(b)]) + b
+    conn.sendall(buf)
+colors = ['16711680', '255', '65280', '16776960']
+def config():
+    c = ['TL', 'eseed {%s}' % seed, 'e$gmflags 0', 'e$damagepct 125', 'e$turntime %d' % turn, 'e$sd_turns 10', 'e$casefreq 5', 'e$minestime 3000', 'e$minesnum 4', 'e$minedudpct 0', 'e$explosives 2', 'e$airmines 0',
+         'e$healthprob 35', 'e$hcaseamount 25', 'e$worldedge 0', 'e$getawaytime 100', 'e$ropepct 100', 'e$template_filter 0', 'e$feature_size 12', 'e$mapgen 0', 'e$maze_size 0', 'etheme Nature']
+    for i, p in enumerate(players):
+        name = str(p.get('name', 'Team %d' % (i + 1)))[:30]; lvl = max(1, min(5, int(p.get('level', 3))))
+        c += ['eaddteam %032x %s %s' % (i + 1, colors[i % 4], name), 'erdriveteam', 'egrave Statue', 'efort Castle', 'evoicepack Default', 'eflag hedgewars',
+              'eammloadt 9391929422199121032135111131121010012110104', 'eammprob 0405040541600101021002020000011002000400010', 'eammdelay 0000000000000002055000000040070000000020000', 'eammreinf 1311110312111111102111011110000111111111111', 'eammstore']
+        for h in range(hogs): c += ['eaddhh %d 100 %s %d' % (lvl, name.split(' ')[0], h + 1), 'ehat NoHat']
+    c.append('!')
+    return c
+stats = []; result = None; ended = None; t0 = time.time(); buf = b''
+conn.settimeout(5)
+while time.time() - t0 < game_s and eng.poll() is None:
+    try: chunk = conn.recv(65536)
+    except socket.timeout: continue
+    except Exception as e: L('recv error', e); break
+    if not chunk: L('engine closed the socket'); break
+    buf += chunk
+    while buf:
+        n = buf[0]
+        if len(buf) < 1 + n: break
+        m = buf[1:1 + n].decode('utf-8', 'replace'); buf = buf[1 + n:]
+        k = m[:1]
+        if k == 'C': L('config requested'); send(*config())
+        elif k == '?': send('!')
+        elif k == 'i': stats.append(m[1:]); L('stat', m[1:])
+        elif k in ('q', 'Q'): ended = k; L('engine says', k); break
+        elif k == 'E': L('ERROR', m[1:])
+        elif k in ('e', 'm'): pass
+        else: L('msg', m[:80])
+    if ended: break
+L('loop done, ended=%s, stats=%d' % (ended, len(stats)))
+time.sleep(2)
+try: conn.close()
+except Exception: pass
+try: eng.terminate(); eng.wait(10)
+except Exception: eng.kill()
+names = [str(p.get('name')) for p in players]; winner = None
+for s in stats:
+    if s[:1] == 'r':
+        txt = s[1:]
+        for nm in names:
+            if nm in txt: winner = nm
+        result = txt
+if winner is None:
+    for s in stats:   # team stats "T<name>:<alive hogs>..." — the team with hogs left wins
+        if s[:1] == 'T':
+            for nm in names:
+                if s[1:].startswith(nm + ':') and not s[1:].startswith(nm + ':0'): winner = winner or nm
+print('RESULT ' + json.dumps({'game': 'hedgewars', 'winner': winner, 'teams': names, 'ok': winner is not None, 'ended': ended, 'resultText': result, 'stats': stats[:40]}))
+PY
+timeout $((GAME_S+60)) python3 /work/hwfront.py "$DATA" 2>&1 | tee /work/logs/hwfront-out.log | grep -v '^RESULT'
+echo "--- hw.log head"; head -30 /work/logs/hw.log; echo "--- hw.log tail"; tail -20 /work/logs/hw.log; echo "--- frontend log"; tail -30 /work/logs/hwfront.log
+R=$(grep -m1 '^RESULT ' /work/logs/hwfront-out.log | sed 's/^RESULT //'); [ -z "$R" ] && R='{"game":"hedgewars","winner":null,"ok":false,"error":"frontend produced no result"}'
+DIAG=$( { echo "== gpu"; cat /work/logs/gpu.log; echo "== help"; head -30 /work/logs/hw-help.log; echo "== hw.log head"; head -40 /work/logs/hw.log; echo "== hw.log key"; grep -iE "error|fail|cannot|warn|opengl|renderer|team|win|stat" /work/logs/hw.log | tail -30; echo "== hw.log tail"; tail -20 /work/logs/hw.log; echo "== frontend"; tail -40 /work/logs/hwfront.log; } 2>/dev/null | cut -c1-220 | head -c 14000 )
+echo "RESULT $(jq -cn --argjson r "$R" --arg diag "$DIAG" '$r + {diag:$diag}')"
