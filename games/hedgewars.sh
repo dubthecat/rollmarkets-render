@@ -43,14 +43,15 @@ def send(*msgs):
     buf = b''
     for m in msgs: b = m.encode('utf-8'); buf += bytes([len(b)]) + b
     conn.sendall(buf)
-colors = ['0', '1', '2', '3']   # team colour INDEX (1.0 protocol)
+colors = ['16711680', '255', '65280', '16776960']   # eaddteam <hash> <rgb int> <name> (QtFrontend: qcolor().rgb() & 0xffffff); different colours = different clans
 def config():
     c = ['TL', 'eseed {%s}' % seed, 'e$gmflags 0', 'e$damagepct 125', 'e$turntime %d' % turn, 'e$sd_turns 8', 'e$casefreq 5', 'e$minestime 3000', 'e$minesnum 4', 'e$minedudpct 0', 'e$explosives 2', 'e$airmines 0',
          'e$healthprob 35', 'e$hcaseamount 25', 'e$worldedge 0', 'e$getawaytime 100', 'e$ropepct 100', 'e$template_filter 0', 'e$feature_size 12', 'e$mapgen 0', 'e$maze_size 0', 'etheme Nature']
+    # per team, exactly as HWGame::commonConfig + HWTeam::teamGameConfig send it: ammo scheme, store, then the team and its hogs
     for i, p in enumerate(players):
         name = str(p.get('name', 'Team %d' % (i + 1)))[:30]; lvl = max(1, min(5, int(p.get('level', 3))))
-        c += ['eaddteam %032x %s %s' % (i + 1, colors[i % 4], name), 'erdriveteam', 'egrave Statue', 'efort Castle', 'evoicepack Default', 'eflag hedgewars',
-              'eammloadt 9391929422199121032135111131121010012110104', 'eammprob 0405040541600101021002020000011002000400010', 'eammdelay 0000000000000002055000000040070000000020000', 'eammreinf 1311110312111111102111011110000111111111111', 'eammstore']
+        c += ['eammloadt 9391929422199121032135111131121010012110104', 'eammprob 0405040541600101021002020000011002000400010', 'eammdelay 0000000000000002055000000040070000000020000', 'eammreinf 1311110312111111102111011110000111111111111', 'eammstore',
+              'eaddteam %032x %s %s' % (i + 1, colors[i % 4], name), 'egrave Statue', 'efort Castle', 'evoicepack Default', 'eflag hedgewars']
         for h in range(hogs): c += ['eaddhh %d 100 %s %d' % (lvl, name.split(' ')[0], h + 1), 'ehat NoHat']
     c.append('!')
     return c
@@ -88,16 +89,25 @@ for s in stats:
         for nm in names:
             if nm in txt: winner = nm
         result = txt
-if winner is None:
-    for s in stats:   # team stats "T<name>:<alive hogs>..." — the team with hogs left wins
-        if s[:1] == 'T':
-            for nm in names:
-                if s[1:].startswith(nm + ':') and not s[1:].startswith(nm + ':0'): winner = winner or nm
+if winner is None:   # the engine also writes "Console: WINNERS / <count> / <team names>" to its log
+    import glob
+    for f in glob.glob('/work/hw/Logs/*.log'):
+        try: lines = [l.rstrip('\n') for l in open(f, errors='replace')]
+        except Exception: continue
+        for k, l in enumerate(lines):
+            if l.endswith('Console: WINNERS'):
+                for l2 in lines[k + 2:k + 4]:
+                    for nm in names:
+                        if l2.endswith('Console: ' + nm): winner = winner or nm
+for s in stats:   # "P<colour> <kills> <TeamName>" is sent for the surviving clan's teams (rank 1)
+    if winner is None and s[:1] == 'P':
+        for nm in names:
+            if s.endswith(' ' + nm): winner = nm
 print('RESULT ' + json.dumps({'game': 'hedgewars', 'winner': winner, 'teams': names, 'ok': winner is not None, 'ended': ended, 'resultText': result, 'stats': stats[:40]}))
 PY
 echo "X before: $(xstate)"
 timeout $((GAME_S+60)) python3 /work/hwfront.py "$DATA" 2>&1 | tee /work/logs/hwfront-out.log | grep -v '^RESULT'
 echo "X after: $(xstate)"; echo "--- hw.log head"; head -30 /work/logs/hw.log; echo "--- hw.log tail"; tail -20 /work/logs/hw.log; echo "--- frontend log"; tail -30 /work/logs/hwfront.log
 R=$(grep -m1 '^RESULT ' /work/logs/hwfront-out.log | sed 's/^RESULT //'); [ -z "$R" ] && R='{"game":"hedgewars","winner":null,"ok":false,"error":"frontend produced no result"}'
-DIAG=$( { echo "== gpu"; cat /work/logs/gpu.log; echo "== X"; grep -E "^X (before|after)" /work/logs/game.log 2>/dev/null; echo "== help"; head -30 /work/logs/hw-help.log; echo "== hw.log head"; head -40 /work/logs/hw.log; echo "== hw.log key"; grep -iE "error|fail|cannot|warn|opengl|renderer|team|win|stat" /work/logs/hw.log | tail -30; echo "== hw.log tail"; tail -20 /work/logs/hw.log; echo "== frontend"; tail -40 /work/logs/hwfront.log; } 2>/dev/null | cut -c1-220 | head -c 14000 )
+DIAG=$( { echo "== gpu"; cat /work/logs/gpu.log; echo "== X"; grep -E "^X (before|after)" /work/logs/game.log 2>/dev/null; echo "== help"; head -30 /work/logs/hw-help.log; echo "== engine log"; ls /work/hw/Logs 2>/dev/null; tail -30 /work/hw/Logs/game0.log 2>/dev/null; echo "== hw.log head"; head -40 /work/logs/hw.log; echo "== hw.log key"; grep -iE "error|fail|cannot|warn|opengl|renderer|team|win|stat" /work/logs/hw.log | tail -30; echo "== hw.log tail"; tail -20 /work/logs/hw.log; echo "== frontend"; tail -40 /work/logs/hwfront.log; } 2>/dev/null | cut -c1-220 | head -c 14000 )
 echo "RESULT $(jq -cn --argjson r "$R" --arg diag "$DIAG" '$r + {diag:$diag}')"
