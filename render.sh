@@ -24,6 +24,7 @@ trap 'finish 143' TERM INT
 log "render pod · game=$GAME match=$MATCH_ID arena=$ARENA via=$VIA ${W}x${H}@${FPS}"
 nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>/dev/null | tee -a $LOG || log "no nvidia-smi"
 # ---- display + encoder ----
+rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 2>/dev/null   # a container restarted by RunPod inherits a stale lock from the previous run
 Xvfb :99 -screen 0 ${W}x${H}x24 +extension GLX +render -noreset >/work/logs/xvfb.log 2>&1 &
 for i in $(seq 1 40); do xdpyinfo -display :99 >/dev/null 2>&1 && break; sleep 0.5; done; log "display up after $((i/2)) s"
 export SDL_VIDEODRIVER=x11
@@ -46,4 +47,7 @@ RESULT=$(grep -m1 '^RESULT ' /work/logs/game.log | sed 's/^RESULT //')
 log "match finished: ${RESULT:-no result}"
 if [ -n "$RESULT" ]; then report result "$(jq -cn --arg id "$MATCH_ID" --arg arena "$ARENA" --arg game "$GAME" --argjson r "$RESULT" '{matchId:$id,arena:$arena,game:$game,result:$r}')"; fi
 sleep 3; kill $FF 2>/dev/null; wait $FF 2>/dev/null
-finish 0
+# never exit: RunPod restarts an exited container, which would play (and report) the match a second time; the engine
+# terminates the pod once it has the result, the janitor kills anything older than its limit
+report log "$(jq -cn --arg id "$MATCH_ID" --arg arena "$ARENA" --arg game "$GAME" --arg tail "$(tails 2500)" '{matchId:$id,arena:$arena,game:$game,tail:$tail,final:true}')"
+kill $LOGPUMP 2>/dev/null; log "idle until terminated"; sleep infinity
