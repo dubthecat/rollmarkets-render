@@ -22,8 +22,13 @@ HOGS=${HOGS:-2}; TURN_MS=${TURN_MS:-15000}; GAME_S=${GAME_S:-540}
 export PLAYERS SEED HOGS TURN_MS GAME_S W H RUN
 echo "match: teams=$(echo "$PLAYERS" | jq -r '[.[].name] | join(" vs ")') hogs=$HOGS turn=${TURN_MS}ms seed=$SEED"; echo "--- gpu diag"; cat /work/logs/gpu.log; echo "---"
 mkdir -p /work/hw
-DATA=/usr/share/games/hedgewars/Data; [ -d $DATA ] || DATA=/usr/share/hedgewars/Data
-hwengine --help >/work/logs/hw-help.log 2>&1 || true
+# Ubuntu keeps the engine out of PATH (/usr/lib/hedgewars/bin/hwengine) and the data under /usr/share/hedgewars/Data
+export PATH="$PATH:/usr/lib/hedgewars/bin:/usr/lib/games/hedgewars/bin:/usr/games"
+HWENGINE=$(command -v hwengine 2>/dev/null || find /usr /opt -name hwengine -type f 2>/dev/null | head -1); export HWENGINE
+DATA=""; for d in /usr/share/games/hedgewars/Data /usr/share/hedgewars/Data /usr/lib/hedgewars/Data; do [ -d "$d/Themes" ] && { DATA=$d; break; }; done
+[ -z "$DATA" ] && DATA=$(find /usr /opt -type d -name Themes -path '*edgewars*' 2>/dev/null | head -1 | xargs -r dirname)
+echo "engine: ${HWENGINE:-NOT FOUND} · data: ${DATA:-NOT FOUND}"; { echo "engine: ${HWENGINE:-NOT FOUND} · data: ${DATA:-NOT FOUND}"; dpkg -L hedgewars 2>/dev/null | grep -E "bin/|Data$" | head -8; } > /work/logs/hw-where.log 2>&1
+[ -n "$HWENGINE" ] && "$HWENGINE" --help >/work/logs/hw-help.log 2>&1 || true
 cat > /work/hwfront.py <<'PY'
 import json, os, socket, subprocess, sys, time, shlex
 players = json.loads(os.environ['PLAYERS']); hogs = int(os.environ.get('HOGS', '3')); turn = int(os.environ.get('TURN_MS', '25000'))
@@ -32,7 +37,7 @@ run = shlex.split(os.environ.get('RUN', '')); data = sys.argv[1]
 srv = socket.socket(); srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); srv.bind(('127.0.0.1', 0)); srv.listen(1); port = srv.getsockname()[1]
 log = open('/work/logs/hwfront.log', 'a')
 def L(*a): print(time.strftime('%H:%M:%S'), *a, file=log, flush=True)
-cmd = run + ['hwengine', '--internal', '--port', str(port), '--prefix', data, '--user-prefix', '/work/hw', '--width', W, '--height', H, '--nosound', '--nomusic', '--nodampen', '--no-teamtag', '--locale', 'en.txt']
+cmd = run + [os.environ.get('HWENGINE') or 'hwengine', '--internal', '--port', str(port), '--prefix', data, '--user-prefix', '/work/hw', '--width', W, '--height', H, '--nosound', '--nomusic', '--nodampen', '--no-teamtag', '--locale', 'en.txt']
 L('spawn', ' '.join(cmd))
 eng = subprocess.Popen(cmd, stdout=open('/work/logs/hw.log', 'a'), stderr=subprocess.STDOUT)
 srv.settimeout(90)
@@ -109,5 +114,5 @@ echo "X before: $(xstate)"
 timeout $((GAME_S+60)) python3 /work/hwfront.py "$DATA" 2>&1 | tee /work/logs/hwfront-out.log | grep -v '^RESULT'
 echo "X after: $(xstate)"; echo "--- hw.log head"; head -30 /work/logs/hw.log; echo "--- hw.log tail"; tail -20 /work/logs/hw.log; echo "--- frontend log"; tail -30 /work/logs/hwfront.log
 R=$(grep -m1 '^RESULT ' /work/logs/hwfront-out.log | sed 's/^RESULT //'); [ -z "$R" ] && R='{"game":"hedgewars","winner":null,"ok":false,"error":"frontend produced no result"}'
-DIAG=$( { echo "== gpu"; cat /work/logs/gpu.log; echo "== X"; grep -E "^X (before|after)" /work/logs/game.log 2>/dev/null; echo "== help"; head -30 /work/logs/hw-help.log; echo "== engine log"; ls /work/hw/Logs 2>/dev/null; tail -30 /work/hw/Logs/game0.log 2>/dev/null; echo "== hw.log head"; head -40 /work/logs/hw.log; echo "== hw.log key"; grep -iE "error|fail|cannot|warn|opengl|renderer|team|win|stat" /work/logs/hw.log | tail -30; echo "== hw.log tail"; tail -20 /work/logs/hw.log; echo "== frontend"; tail -40 /work/logs/hwfront.log; } 2>/dev/null | cut -c1-220 | head -c 14000 )
+DIAG=$( { echo "== gpu"; cat /work/logs/gpu.log; echo "== X"; grep -E "^X (before|after)" /work/logs/game.log 2>/dev/null; echo "== where"; cat /work/logs/hw-where.log; echo "== help"; head -30 /work/logs/hw-help.log; echo "== engine log"; ls /work/hw/Logs 2>/dev/null; tail -30 /work/hw/Logs/game0.log 2>/dev/null; echo "== hw.log head"; head -40 /work/logs/hw.log; echo "== hw.log key"; grep -iE "error|fail|cannot|warn|opengl|renderer|team|win|stat" /work/logs/hw.log | tail -30; echo "== hw.log tail"; tail -20 /work/logs/hw.log; echo "== frontend"; tail -40 /work/logs/hwfront.log; } 2>/dev/null | cut -c1-220 | head -c 14000 )
 echo "RESULT $(jq -cn --argjson r "$R" --arg diag "$DIAG" '$r + {diag:$diag}')"
