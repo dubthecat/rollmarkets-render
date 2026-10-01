@@ -19,7 +19,8 @@ log "render pod · game=$GAME match=$MATCH_ID arena=$ARENA via=$VIA ${W}x${H}@${
 nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>/dev/null | tee -a $LOG || log "no nvidia-smi"
 # ---- display + encoder ----
 Xvfb :99 -screen 0 ${W}x${H}x24 +extension GLX +render -noreset >/work/logs/xvfb.log 2>&1 &
-sleep 1.5
+for i in $(seq 1 40); do xdpyinfo -display :99 >/dev/null 2>&1 && break; sleep 0.5; done; log "display up after $((i/2)) s"
+export SDL_VIDEODRIVER=x11
 { echo "vglrun: $(command -v vglrun || echo missing)"; ls /dev/nvidia* 2>/dev/null | tr "\n" " "; echo; ls /usr/lib/x86_64-linux-gnu/libnvidia-egl* /usr/lib/x86_64-linux-gnu/libEGL_nvidia* /usr/share/glvnd/egl_vendor.d/ 2>/dev/null | tr "\n" " "; echo; eglinfo -B 2>&1 | head -12; } >/work/logs/gpu.log 2>&1
 if command -v vglrun >/dev/null && VGL_DISPLAY=egl vglrun -d egl glxinfo -B >/work/logs/glx.log 2>&1; then export VGL_DISPLAY=egl; RUN="vglrun -d egl"; log "GL: VirtualGL/EGL → $(grep -m1 'OpenGL renderer' /work/logs/glx.log)"; else RUN=""; log "GL: software (llvmpipe)"; export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe; fi
 export RUN
