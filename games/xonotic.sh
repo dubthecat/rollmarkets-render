@@ -46,6 +46,9 @@ $XON/xonotic-linux64-dedicated -basedir $XON -userdir /work/xon +exec server.cfg
 SRV=$!; sleep 10
 # the spectator client renders the match; once in, "attack" makes it follow a player (chase camera)
 cat > /work/xonc/data/spect.cfg <<CFG
+cl_allow_uid2name 0
+cl_allow_uidtracking 0
+cl_allow_uidranking 0
 vid_fullscreen 0
 mastervolume 0
 cl_autodemo 0
