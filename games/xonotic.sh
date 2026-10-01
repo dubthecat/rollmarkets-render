@@ -74,6 +74,23 @@ kill $CL 2>/dev/null; kill $SRV 2>/dev/null; sleep 1
 echo "--- xonsrv.log tail"; tail -40 $D/xonsrv.log; echo "--- xoncl.log tail"; tail -20 $D/xoncl.log
 # event log at the end: ":teamscores:see-labels:<score,...>:<team>" with team 5 = red, 14 = blue; ":player:see-labels:<score,kills,...>:<slot>:<team>:<name>"
 RED=$(grep -E "^:teamscores:see-labels:" $D/xonsrv.log | awk -F: '$5=="5"{print $4}' | tail -1 | cut -d, -f1); BLUE=$(grep -E "^:teamscores:see-labels:" $D/xonsrv.log | awk -F: '$5=="14"{print $4}' | tail -1 | cut -d, -f1)
-PLAYERS_OUT=$(awk '/^:gamestart:/{n=0} /^:player:see-labels:/{a[n++]=$0} END{for(i=0;i<n;i++) print a[i]}' $D/xonsrv.log | awk -F: '$6!="spectator"{print $7"|"$6"|"$4}' | jq -R 'split("|") | {name:.[0], team:(if .[1]=="5" then "red" elif .[1]=="14" then "blue" else .[1] end), score:(.[2]|split(",")[0]|tonumber? // null)}' | jq -cs .)
+# per-player frags from the event log of the last game: ":join:<slot>:<id>:<ip>:<name>", ":team:<slot>:<team>:<old>", ":kill:frag:<attacker>:<victim>:…"
+PLAYERS_OUT=$(python3 - "$D/xonsrv.log" <<'PY'
+import sys, json, re
+lines = open(sys.argv[1], errors='replace').read().split('\n')
+try: start = max(i for i, l in enumerate(lines) if l.startswith(':gamestart:'))
+except ValueError: start = 0
+name, team, frags, deaths = {}, {}, {}, {}
+for l in lines[start:]:
+    f = l.split(':')
+    if l.startswith(':join:') and len(f) >= 6: name[f[2]] = f[5]; frags.setdefault(f[2], 0); deaths.setdefault(f[2], 0)
+    elif l.startswith(':team:') and len(f) >= 4: team[f[2]] = f[3]
+    elif l.startswith(':kill:frag:') and len(f) >= 5: frags[f[3]] = frags.get(f[3], 0) + 1; deaths[f[4]] = deaths.get(f[4], 0) + 1
+    elif l.startswith(':kill:suicide:') and len(f) >= 4: deaths[f[3]] = deaths.get(f[3], 0) + 1
+tm = lambda t: {'5': 'red', '14': 'blue'}.get(t, t or '?')
+out = [{'name': re.sub(r'\^\d|\^x[0-9a-fA-F]{3}', '', name[s]), 'team': tm(team.get(s)), 'frags': frags.get(s, 0), 'deaths': deaths.get(s, 0)} for s in name if name[s] and team.get(s) in ('5', '14')]
+out.sort(key=lambda p: -p['frags']); print(json.dumps(out))
+PY
+)
 DIAG=$( { echo "== runner"; md5sum /games/xonotic.sh | cut -c1-8; head -14 $D/render.log; echo "== gpu"; cat $D/gpu.log; echo "== dir"; cat $D/xon-ls.log; echo "== X"; grep -E "^X (before|after)" $D/game.log 2>/dev/null; echo "== server head"; head -25 $D/xonsrv.log; echo "== gamestart"; grep -a "^:gamestart:" $D/xonsrv.log | head -3; echo "== server key"; grep -aiE "^:(end|teamscores|player|gamestart)|bot_|error|cannot|fail|gametype" $D/xonsrv.log | tail -60; echo "== client head"; head -20 $D/xoncl.log; echo "== client key"; grep -iE "error|fail|cannot|renderer|opengl|connect|spectat|video" $D/xoncl.log | tail -30; echo "== client tail"; tail -12 $D/xoncl.log; } 2>/dev/null | cut -c1-220 | head -c 14000 )
 echo "RESULT $(jq -cn --arg red "${RED:-}" --arg blue "${BLUE:-}" --arg map "$MAP" --argjson players "${PLAYERS_OUT:-[]}" --arg diag "$DIAG" '{game:"xonotic",frags:{red:($red|tonumber? // null),blue:($blue|tonumber? // null)},players:$players,map:$map,ok:(($red|length)>0 and ($blue|length)>0),diag:$diag}')"
