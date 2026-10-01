@@ -2,6 +2,11 @@
 # Team deathmatch between built-in bots on a dedicated server, watched by a spectator client that is
 # captured; the server's event log gives frags and the winner. $PLAYERS: [{name, team:"red"|"blue", skill}]
 set -uo pipefail
+export PATH="$PATH:/usr/games:/usr/local/games"
+# an empty player list means "use the defaults"
+[ -z "${PLAYERS:-}" ] || [ "${PLAYERS}" = "[]" ] && unset PLAYERS
+# GPU diagnostics once per run
+{ echo "caps=${NVIDIA_DRIVER_CAPABILITIES:-} vgl=${VGL_DISPLAY:-} RUN=${RUN:-}"; ls /dev/nvidia* 2>/dev/null | tr '\n' ' '; echo; ls /usr/lib/x86_64-linux-gnu/libnvidia-egl* /usr/share/glvnd/egl_vendor.d/ 2>/dev/null | tr '\n' ' '; echo; cat /work/logs/glx.log 2>/dev/null | head -5; } >/work/logs/gpu.log 2>&1
 PLAYERS=${PLAYERS:-'[{"name":"Coach aggressive","team":"red","skill":7},{"name":"Coach tactical","team":"blue","skill":7}]'}
 MAP=${MAP:-dance}; FRAGS=${FRAGS:-20}; TLIMIT=${TLIMIT:-5}
 mkdir -p /work/xon && cat > /work/xon/server.cfg <<CFG

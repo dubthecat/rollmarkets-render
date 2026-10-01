@@ -3,6 +3,11 @@
 # the engine records a demo and --stats-only style output gives the winner. Best effort: the
 # protocol is version-sensitive (Hedgewars 1.0.x). $PLAYERS: [{name, level}] (AI level 1 strong … 5 weak)
 set -uo pipefail
+export PATH="$PATH:/usr/games:/usr/local/games"
+# an empty player list means "use the defaults"
+[ -z "${PLAYERS:-}" ] || [ "${PLAYERS}" = "[]" ] && unset PLAYERS
+# GPU diagnostics once per run
+{ echo "caps=${NVIDIA_DRIVER_CAPABILITIES:-} vgl=${VGL_DISPLAY:-} RUN=${RUN:-}"; ls /dev/nvidia* 2>/dev/null | tr '\n' ' '; echo; ls /usr/lib/x86_64-linux-gnu/libnvidia-egl* /usr/share/glvnd/egl_vendor.d/ 2>/dev/null | tr '\n' ' '; echo; cat /work/logs/glx.log 2>/dev/null | head -5; } >/work/logs/gpu.log 2>&1
 PLAYERS=${PLAYERS:-'[{"name":"Hog bot rookie","level":4},{"name":"Hog bot veteran","level":2}]'}
 SEED=${SEED:-$(head -c 8 /dev/urandom | od -An -tx1 | tr -d ' \n')}
 A=$(echo "$PLAYERS" | jq -r '.[0].name'); AL=$(echo "$PLAYERS" | jq -r '.[0].level'); B=$(echo "$PLAYERS" | jq -r '.[1].name'); BL=$(echo "$PLAYERS" | jq -r '.[1].level')

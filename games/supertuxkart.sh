@@ -2,6 +2,11 @@
 # An AI-only race in SuperTuxKart's demo mode (every kart is driven by the game's AI), watched from the
 # game's camera. The result is read from the game's verbose log at the end of the race.
 set -uo pipefail
+export PATH="$PATH:/usr/games:/usr/local/games"
+# an empty player list means "use the defaults"
+[ -z "${PLAYERS:-}" ] || [ "${PLAYERS}" = "[]" ] && unset PLAYERS
+# GPU diagnostics once per run
+{ echo "caps=${NVIDIA_DRIVER_CAPABILITIES:-} vgl=${VGL_DISPLAY:-} RUN=${RUN:-}"; ls /dev/nvidia* 2>/dev/null | tr '\n' ' '; echo; ls /usr/lib/x86_64-linux-gnu/libnvidia-egl* /usr/share/glvnd/egl_vendor.d/ 2>/dev/null | tr '\n' ' '; echo; cat /work/logs/glx.log 2>/dev/null | head -5; } >/work/logs/gpu.log 2>&1
 PLAYERS=${PLAYERS:-'[{"name":"Kart bot cautious","kart":"tux","ai":1},{"name":"Kart bot balanced","kart":"gnu","ai":2},{"name":"Kart bot reckless","kart":"sara_the_racer","ai":3},{"name":"Kart bot pro","kart":"nolok","ai":3}]'}
 TRACK=${TRACK:-lighthouse}; LAPS=${LAPS:-2}
 N=$(echo "$PLAYERS" | jq 'length'); KARTS=$(echo "$PLAYERS" | jq -r '[.[].kart] | join(",")')

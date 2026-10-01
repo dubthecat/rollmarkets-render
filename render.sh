@@ -7,7 +7,7 @@ mkdir -p /work/logs; LOG=/work/logs/render.log; : > $LOG
 log() { echo "$(date -u +%H:%M:%S) $*" | tee -a $LOG; }
 # ---- report logs and results to the engine (auth = the publish key) ----
 report() { curl -s -m 8 -X POST "$ENGINE/v1/stream/pod/$1" -H 'content-type: application/json' -H "x-pod-key: $PUBLISH_KEY" -d "$2" >/dev/null 2>&1 || true; }
-tails() { for f in render.log glx.log game.log stk.log xonsrv.log xoncl.log hw.log ffmpeg.log xvfb.log; do [ -s /work/logs/$f ] && { echo "==> $f"; tail -c ${1:-1500} /work/logs/$f; echo; }; done; }
+tails() { for f in render.log gpu.log glx.log game.log stk.log xonsrv.log xoncl.log hw.log ffmpeg.log xvfb.log; do [ -s /work/logs/$f ] && { echo "==> $f"; tail -c ${1:-1500} /work/logs/$f; echo; }; done; }
 logpump() { while true; do sleep 20; report log "$(jq -cn --arg id "$MATCH_ID" --arg arena "$ARENA" --arg game "$GAME" --arg tail "$(tails 1200)" '{matchId:$id,arena:$arena,game:$game,tail:$tail}')"; done; }
 # runners are fetched fresh from the repo at start (iterate without rebuilding the image); RUNNER_RAW="" disables
 : "${RUNNER_RAW:=https://raw.githubusercontent.com/dubthecat/rollmarkets-render/main}"
