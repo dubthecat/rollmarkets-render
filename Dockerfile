@@ -7,8 +7,11 @@ ENV DEBIAN_FRONTEND=noninteractive NVIDIA_DRIVER_CAPABILITIES=all TZ=UTC
 RUN apt-get update && apt-get install -y --no-install-recommends \
       xvfb x11-utils x11-xserver-utils xdotool mesa-utils libgl1-mesa-dri libegl1 libglx-mesa0 \
       ffmpeg fonts-dejavu-core pulseaudio alsa-utils ca-certificates curl wget unzip jq python3 procps \
-      supertuxkart supertuxkart-data xonotic xonotic-data hedgewars \
+      supertuxkart supertuxkart-data hedgewars libsdl2-2.0-0 libjpeg-turbo8 libcurl4 \
     && rm -rf /var/lib/apt/lists/*
+# Xonotic is not packaged by Ubuntu: the official release zip carries the Linux dedicated server and client
+RUN wget -q https://dl.xonotic.org/xonotic-0.8.6.zip -O /tmp/x.zip && unzip -q /tmp/x.zip -d /opt && rm /tmp/x.zip \
+    && ln -s /opt/Xonotic/xonotic-linux64-dedicated /usr/local/bin/xonotic-dedicated && ln -s /opt/Xonotic/xonotic-linux64-glx /usr/local/bin/xonotic-glx
 # VirtualGL (EGL back end: GPU rendering inside the container, under Xvfb)
 RUN wget -qO /tmp/vgl.deb https://downloads.sourceforge.net/project/virtualgl/3.1.1/virtualgl_3.1.1_amd64.deb \
     && apt-get update && apt-get install -y --no-install-recommends /tmp/vgl.deb && rm -rf /var/lib/apt/lists/* /tmp/vgl.deb || echo "virtualgl install skipped"
