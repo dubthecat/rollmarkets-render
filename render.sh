@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Env: GAME MATCH_ID ARENA SRT_URL VIA ENGINE PUBLISH_KEY (also PLAYERS as JSON), W H FPS BITRATE optional.
 set -uo pipefail
-: "${GAME:=test}" "${MATCH_ID:=demo}" "${ARENA:=kart}" "${SRT_URL:?SRT_URL required}" "${VIA:=srt}" "${ENGINE:=https://rollmarkets.com}" "${W:=1280}" "${H:=720}" "${FPS:=30}" "${BITRATE:=3M}" "${PUBLISH_KEY:=}"
+: "${GAME:=test}" "${MATCH_ID:=demo}" "${ARENA:=kart}" "${SRT_URL:?SRT_URL required}" "${VIA:=srt}" "${ENGINE:=https://rollmarkets.com}" "${W:=960}" "${H:=540}" "${FPS:=30}" "${BITRATE:=3M}" "${PUBLISH_KEY:=}"
 export DISPLAY=:99 W H FPS GAME MATCH_ID ARENA ENGINE
 mkdir -p /work/logs; LOG=/work/logs/render.log; : > $LOG
 log() { echo "$(date -u +%H:%M:%S) $*" | tee -a $LOG; }
@@ -20,6 +20,7 @@ nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>/dev/null | t
 # ---- display + encoder ----
 Xvfb :99 -screen 0 ${W}x${H}x24 +extension GLX +render -noreset >/work/logs/xvfb.log 2>&1 &
 sleep 1.5
+{ echo "vglrun: $(command -v vglrun || echo missing)"; ls /dev/nvidia* 2>/dev/null | tr "\n" " "; echo; ls /usr/lib/x86_64-linux-gnu/libnvidia-egl* /usr/lib/x86_64-linux-gnu/libEGL_nvidia* /usr/share/glvnd/egl_vendor.d/ 2>/dev/null | tr "\n" " "; echo; eglinfo -B 2>&1 | head -12; } >/work/logs/gpu.log 2>&1
 if command -v vglrun >/dev/null && VGL_DISPLAY=egl vglrun -d egl glxinfo -B >/work/logs/glx.log 2>&1; then export VGL_DISPLAY=egl; RUN="vglrun -d egl"; log "GL: VirtualGL/EGL → $(grep -m1 'OpenGL renderer' /work/logs/glx.log)"; else RUN=""; log "GL: software (llvmpipe)"; export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe; fi
 export RUN
 if ffmpeg -hide_banner -encoders 2>/dev/null | grep -q h264_nvenc && nvidia-smi >/dev/null 2>&1; then ENC="-c:v h264_nvenc -preset p4 -tune ll -b:v $BITRATE -maxrate $BITRATE -bufsize 2M -g $((FPS*2))"; log "encoder: nvenc"; else ENC="-c:v libx264 -preset veryfast -tune zerolatency -b:v $BITRATE -g $((FPS*2))"; log "encoder: x264"; fi
