@@ -34,10 +34,15 @@ timelimit $TLIMIT
 sv_vote_commands ""
 sv_autodemo 0
 g_warmup 0
-gametype tdm
+g_tdm 1
+g_dm 0
+g_ctf 0
+g_tdm_teams 2
+sv_vote_gametype 0
 map $MAP
 CFG
-cd $XON && ./xonotic-linux64-dedicated -basedir $XON -userdir /work/xon +exec server.cfg >$D/xonsrv.log 2>&1 &
+cd $XON || echo "no $XON"
+$XON/xonotic-linux64-dedicated -basedir $XON -userdir /work/xon +exec server.cfg >$D/xonsrv.log 2>&1 &
 SRV=$!; sleep 10
 # the spectator client renders the match; once in, "attack" makes it follow a player (chase camera)
 cat > /work/xonc/data/spect.cfg <<CFG
@@ -51,7 +56,7 @@ defer 27 "-attack"
 connect 127.0.0.1
 CFG
 echo "X before: $(xstate)"
-timeout $((TLIMIT*60+120)) $RUN ./xonotic-linux64-glx -basedir $XON -userdir /work/xonc -nosound -window -width $W -height $H +exec spect.cfg >$D/xoncl.log 2>&1 &
+timeout $((TLIMIT*60+120)) $RUN $XON/xonotic-linux64-glx -basedir $XON -userdir /work/xonc -nosound -window -width $W -height $H +exec spect.cfg >$D/xoncl.log 2>&1 &
 CL=$!
 # wait for the match to end (eventlog ":end"), or for the server to die
 for i in $(seq 1 $((TLIMIT*60+90))); do grep -q "^:end" $D/xonsrv.log 2>/dev/null && { sleep 5; break; }; kill -0 $SRV 2>/dev/null || break; sleep 1; done
@@ -61,5 +66,5 @@ echo "--- xonsrv.log tail"; tail -40 $D/xonsrv.log; echo "--- xoncl.log tail"; t
 # event log at the end: ":teamscores:see-labels:<score,...>:<team>" with team 5 = red, 14 = blue; ":player:see-labels:<score,kills,...>:<slot>:<team>:<name>"
 RED=$(grep -E "^:teamscores:see-labels:" $D/xonsrv.log | awk -F: '$5=="5"{print $4}' | tail -1 | cut -d, -f1); BLUE=$(grep -E "^:teamscores:see-labels:" $D/xonsrv.log | awk -F: '$5=="14"{print $4}' | tail -1 | cut -d, -f1)
 PLAYERS_OUT=$(grep -E "^:player:see-labels:" $D/xonsrv.log | tail -$((BOTS+2)) | awk -F: '{print $7"|"$6"|"$4}' | jq -R 'split("|") | {name:.[0], team:(if .[1]=="5" then "red" elif .[1]=="14" then "blue" else .[1] end), score:(.[2]|split(",")[0]|tonumber? // null)}' | jq -cs .)
-DIAG=$( { echo "== runner"; md5sum /games/xonotic.sh | cut -c1-8; head -14 $D/render.log; echo "== gpu"; cat $D/gpu.log; echo "== dir"; cat $D/xon-ls.log; echo "== X"; grep -E "^X (before|after)" $D/game.log 2>/dev/null; echo "== server head"; head -25 $D/xonsrv.log; echo "== server key"; grep -iE "^:|bot|error|map|gametype|cannot|fail" $D/xonsrv.log | tail -60; echo "== client head"; head -20 $D/xoncl.log; echo "== client key"; grep -iE "error|fail|cannot|renderer|opengl|connect|spectat|video" $D/xoncl.log | tail -30; echo "== client tail"; tail -12 $D/xoncl.log; } 2>/dev/null | cut -c1-220 | head -c 14000 )
+DIAG=$( { echo "== runner"; md5sum /games/xonotic.sh | cut -c1-8; head -14 $D/render.log; echo "== gpu"; cat $D/gpu.log; echo "== dir"; cat $D/xon-ls.log; echo "== X"; grep -E "^X (before|after)" $D/game.log 2>/dev/null; echo "== server head"; head -25 $D/xonsrv.log; echo "== gamestart"; grep -a "^:gamestart:" $D/xonsrv.log | head -3; echo "== server key"; grep -aiE "^:(end|teamscores|player|gamestart)|bot_|error|cannot|fail|gametype" $D/xonsrv.log | tail -60; echo "== client head"; head -20 $D/xoncl.log; echo "== client key"; grep -iE "error|fail|cannot|renderer|opengl|connect|spectat|video" $D/xoncl.log | tail -30; echo "== client tail"; tail -12 $D/xoncl.log; } 2>/dev/null | cut -c1-220 | head -c 14000 )
 echo "RESULT $(jq -cn --arg red "${RED:-}" --arg blue "${BLUE:-}" --arg map "$MAP" --argjson players "${PLAYERS_OUT:-[]}" --arg diag "$DIAG" '{game:"xonotic",frags:{red:($red|tonumber? // null),blue:($blue|tonumber? // null)},players:$players,map:$map,ok:(($red|length)>0 and ($blue|length)>0),diag:$diag}')"

@@ -22,12 +22,13 @@ export XDG_DATA_HOME=/work/stk XDG_CONFIG_HOME=/work/stk
 mkdir -p /work/stk
 # the profile table: "profile: <kart ident> <controller name…> <start position> <end position> <finish time> …" — the
 # controller name may be several words, so the parser locates the first "int int float" triple instead of fixed fields
-parse_order() { python3 - "$D/stk.log" <<'PY'
+parse_order() { python3 - "$D/stk.log" "$KARTS" <<'PY'
 import re, sys, json
-rows = []
+rows = []; karts = set(sys.argv[2].split(','))
 for line in open(sys.argv[1], errors='replace'):
     if 'profile:' not in line: continue
     t = line.split('profile:', 1)[1].split()
+    if not t or t[0] not in karts: continue   # only kart rows (the per-controller summary lines also carry numbers)
     for i in range(1, len(t) - 2):
         if re.fullmatch(r'\d+', t[i]) and re.fullmatch(r'\d+', t[i+1]) and re.fullmatch(r'\d+(\.\d+)?', t[i+2]):
             rows.append((int(t[i+1]), t[0])); break
