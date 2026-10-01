@@ -85,7 +85,7 @@ while time.time() - t0 < game_s and eng.poll() is None:
         elif k in ('q', 'Q'): ended = k; L('engine says', k); break
         elif k == 'E': L('ERROR', m[1:])
         elif k in ('e', 'm'): pass
-        else: L('msg', m[:80])
+        elif m.isprintable() and len(m) > 3: L('msg', m[:80])   # the rest are binary gameplay packets
     if ended: break
 L('loop done, ended=%s, stats=%d' % (ended, len(stats)))
 time.sleep(2)
@@ -120,6 +120,6 @@ echo "X before: $(xstate)"
 timeout $((GAME_S+60)) python3 /work/hwfront.py "$DATA" 2>&1 | tee /work/logs/hwfront-out.log | grep -v '^RESULT'
 echo "X after: $(xstate)"; echo "--- hw.log head"; head -30 /work/logs/hw.log; echo "--- hw.log tail"; tail -20 /work/logs/hw.log; echo "--- frontend log"; tail -30 /work/logs/hwfront.log
 R=$(grep -m1 '^RESULT ' /work/logs/hwfront-out.log | sed 's/^RESULT //'); [ -z "$R" ] && R='{"game":"hedgewars","winner":null,"ok":false,"error":"frontend produced no result"}'
-DIAG=$( { echo "== gpu"; cat /work/logs/gpu.log; echo "== X"; grep -E "^X (before|after)" /work/logs/game.log 2>/dev/null; echo "== where"; cat /work/logs/hw-where.log; echo "== help"; head -30 /work/logs/hw-help.log; echo "== engine log"; ls /work/hw/Logs 2>/dev/null; tail -30 /work/hw/Logs/game0.log 2>/dev/null; echo "== hw.log head"; head -40 /work/logs/hw.log; echo "== hw.log key"; grep -iE "error|fail|cannot|warn|opengl|renderer|team|win|stat" /work/logs/hw.log | tail -30; echo "== hw.log tail"; tail -20 /work/logs/hw.log; echo "== frontend"; tail -40 /work/logs/hwfront.log; echo "== frontend stdout"; tail -c 1500 /work/logs/hwfront-out.log; echo "== jq"; cat /work/logs/jq.err 2>/dev/null; echo "== winners"; grep -a -A3 "^WINNERS\|^DRAW" /work/logs/hw.log | head -8; } 2>/dev/null | cut -c1-220 | head -c 14000 )
+DIAG=$( { echo "== gpu"; cat /work/logs/gpu.log; echo "== X"; grep -E "^X (before|after)" /work/logs/game.log 2>/dev/null; echo "== where"; cat /work/logs/hw-where.log; echo "== help"; head -30 /work/logs/hw-help.log; echo "== engine log"; ls /work/hw/Logs 2>/dev/null; tail -30 /work/hw/Logs/game0.log 2>/dev/null; echo "== hw.log head"; head -40 /work/logs/hw.log; echo "== hw.log key"; grep -iE "error|fail|cannot|warn|opengl|renderer|team|win|stat" /work/logs/hw.log | tail -30; echo "== hw.log tail"; tail -20 /work/logs/hw.log; echo "== frontend"; tail -40 /work/logs/hwfront.log; echo "== frontend stdout"; tail -c 1500 /work/logs/hwfront-out.log; echo "== jq"; cat /work/logs/jq.err 2>/dev/null; echo "== winners"; grep -a -A3 "^WINNERS\|^DRAW" /work/logs/hw.log | head -8; } 2>/dev/null | tr -cd '\11\12\15\40-\176' | cut -c1-200 | head -c 6000 )
 OUT=$(jq -cn --argjson r "$R" --arg diag "$DIAG" '$r + {diag:$diag}' 2>/work/logs/jq.err) || OUT="$R"   # a jq failure must not swallow the result
 echo "RESULT $OUT"

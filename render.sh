@@ -45,7 +45,12 @@ sleep 2
 /games/$GAME.sh 2>&1 | tee /work/logs/game.log
 RESULT=$(grep -m1 '^RESULT ' /work/logs/game.log | sed 's/^RESULT //')
 log "match finished: ${RESULT:-no result}"
-if [ -n "$RESULT" ]; then report result "$(jq -cn --arg id "$MATCH_ID" --arg arena "$ARENA" --arg game "$GAME" --argjson r "$RESULT" '{matchId:$id,arena:$arena,game:$game,result:$r}')"; fi
+if [ -n "$RESULT" ]; then
+  BODY=$(jq -cn --arg id "$MATCH_ID" --arg arena "$ARENA" --arg game "$GAME" --argjson r "$RESULT" '{matchId:$id,arena:$arena,game:$game,result:$r}' 2>/dev/null)
+  [ -z "$BODY" ] && BODY=$(jq -cn --arg id "$MATCH_ID" --arg arena "$ARENA" --arg game "$GAME" --arg raw "$RESULT" '{matchId:$id,arena:$arena,game:$game,result:{ok:false,error:"unparseable RESULT",raw:$raw[0:2000]}}')
+  if [ ${#BODY} -gt 30000 ]; then BODY=$(jq -c '.result.diag = ((.result.diag // "")[0:4000])' <<< "$BODY"); fi   # the engine accepts 32 KB
+  log "result body ${#BODY} bytes"; report result "$BODY"
+fi
 sleep 3; kill $FF 2>/dev/null; wait $FF 2>/dev/null
 # never exit: RunPod restarts an exited container, which would play (and report) the match a second time; the engine
 # terminates the pod once it has the result, the janitor kills anything older than its limit
