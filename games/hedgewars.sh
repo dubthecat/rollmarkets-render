@@ -18,7 +18,7 @@ export RUN
 xstate() { echo "xvfb alive: $(pgrep -c Xvfb) · xdpyinfo: $(xdpyinfo -display :99 >/dev/null 2>&1 && echo ok || echo FAIL) · xvfb.log tail: $(tail -c 200 $D/xvfb.log 2>/dev/null | tr "\n" " ")"; }
 PLAYERS=${PLAYERS:-'[{"name":"Hog bot rookie","level":4},{"name":"Hog bot veteran","level":2}]'}
 SEED=${SEED:-$(head -c 8 /dev/urandom | od -An -tx1 | tr -d ' \n')}
-HOGS=${HOGS:-2}; TURN_MS=${TURN_MS:-20000}; GAME_S=${GAME_S:-600}
+HOGS=${HOGS:-2}; TURN_MS=${TURN_MS:-15000}; GAME_S=${GAME_S:-540}
 export PLAYERS SEED HOGS TURN_MS GAME_S W H RUN
 echo "match: teams=$(echo "$PLAYERS" | jq -r '[.[].name] | join(" vs ")') hogs=$HOGS turn=${TURN_MS}ms seed=$SEED"; echo "--- gpu diag"; cat /work/logs/gpu.log; echo "---"
 mkdir -p /work/hw
@@ -45,7 +45,7 @@ def send(*msgs):
     conn.sendall(buf)
 colors = ['16711680', '255', '65280', '16776960']   # eaddteam <hash> <rgb int> <name> (QtFrontend: qcolor().rgb() & 0xffffff); different colours = different clans
 def config():
-    c = ['TL', 'eseed {%s}' % seed, 'e$gmflags 0', 'e$damagepct 125', 'e$turntime %d' % turn, 'e$sd_turns 8', 'e$casefreq 5', 'e$minestime 3000', 'e$minesnum 4', 'e$minedudpct 0', 'e$explosives 2', 'e$airmines 0',
+    c = ['TL', 'eseed {%s}' % seed, 'e$gmflags 0', 'e$damagepct 125', 'e$turntime %d' % turn, 'e$sd_turns 6', 'e$casefreq 5', 'e$minestime 3000', 'e$minesnum 4', 'e$minedudpct 0', 'e$explosives 2', 'e$airmines 0',
          'e$healthprob 35', 'e$hcaseamount 25', 'e$worldedge 0', 'e$getawaytime 100', 'e$ropepct 100', 'e$template_filter 0', 'e$feature_size 12', 'e$mapgen 0', 'e$maze_size 0', 'etheme Nature']
     # per team, exactly as HWGame::commonConfig + HWTeam::teamGameConfig send it: ammo scheme, store, then the team and its hogs
     for i, p in enumerate(players):
