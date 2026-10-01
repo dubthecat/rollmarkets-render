@@ -7,9 +7,13 @@ mkdir -p /work/logs; LOG=/work/logs/render.log; : > $LOG
 log() { echo "$(date -u +%H:%M:%S) $*" | tee -a $LOG; }
 # ---- report logs and results to the engine (auth = the publish key) ----
 report() { curl -s -m 8 -X POST "$ENGINE/v1/stream/pod/$1" -H 'content-type: application/json' -H "x-pod-key: $PUBLISH_KEY" -d "$2" >/dev/null 2>&1 || true; }
-logpump() { while true; do sleep 20; report log "$(jq -cn --arg id "$MATCH_ID" --arg arena "$ARENA" --arg game "$GAME" --arg tail "$(tail -c 6000 $LOG /work/logs/game.log 2>/dev/null)" '{matchId:$id,arena:$arena,game:$game,tail:$tail}')"; done; }
+tails() { for f in render.log glx.log game.log stk.log xonsrv.log xoncl.log hw.log ffmpeg.log xvfb.log; do [ -s /work/logs/$f ] && { echo "==> $f"; tail -c ${1:-1500} /work/logs/$f; echo; }; done; }
+logpump() { while true; do sleep 20; report log "$(jq -cn --arg id "$MATCH_ID" --arg arena "$ARENA" --arg game "$GAME" --arg tail "$(tails 1200)" '{matchId:$id,arena:$arena,game:$game,tail:$tail}')"; done; }
+# runners are fetched fresh from the repo at start (iterate without rebuilding the image); RUNNER_RAW="" disables
+: "${RUNNER_RAW:=https://raw.githubusercontent.com/dubthecat/rollmarkets-render/main}"
+if [ -n "$RUNNER_RAW" ] && [ "$GAME" != test ]; then curl -fsSL "$RUNNER_RAW/games/$GAME.sh?$(date +%s)" -o /games/$GAME.sh && chmod +x /games/$GAME.sh && log "runner fetched from $RUNNER_RAW" || log "runner fetch failed, using the image copy"; fi
 logpump & LOGPUMP=$!
-finish() { local code=${1:-0}; report log "$(jq -cn --arg id "$MATCH_ID" --arg arena "$ARENA" --arg game "$GAME" --arg tail "$(tail -c 6000 $LOG /work/logs/game.log 2>/dev/null)" '{matchId:$id,arena:$arena,game:$game,tail:$tail,final:true}')"; kill $LOGPUMP 2>/dev/null; exit $code; }
+finish() { local code=${1:-0}; report log "$(jq -cn --arg id "$MATCH_ID" --arg arena "$ARENA" --arg game "$GAME" --arg tail "$(tails 2500)" '{matchId:$id,arena:$arena,game:$game,tail:$tail,final:true}')"; kill $LOGPUMP 2>/dev/null; exit $code; }
 trap 'finish 143' TERM INT
 log "render pod · game=$GAME match=$MATCH_ID arena=$ARENA via=$VIA ${W}x${H}@${FPS}"
 nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>/dev/null | tee -a $LOG || log "no nvidia-smi"
