@@ -29,6 +29,8 @@ DATA=""; for d in /usr/share/games/hedgewars/Data /usr/share/hedgewars/Data /usr
 [ -z "$DATA" ] && DATA=$(find /usr /opt -type d -name Themes -path '*edgewars*' 2>/dev/null | head -1 | xargs -r dirname)
 echo "engine: ${HWENGINE:-NOT FOUND} · data: ${DATA:-NOT FOUND}"; { echo "engine: ${HWENGINE:-NOT FOUND} · data: ${DATA:-NOT FOUND}"; dpkg -L hedgewars 2>/dev/null | grep -E "bin/|Data$" | head -8; } > /work/logs/hw-where.log 2>&1
 [ -n "$HWENGINE" ] && "$HWENGINE" --help >/work/logs/hw-help.log 2>&1 || true
+HWVER=$(dpkg-query -W -f='${Version}' hedgewars 2>/dev/null || echo unknown); echo "hedgewars package $HWVER" >> /work/logs/hw-where.log
+case "$HWVER" in 1.0.*) export HW_AMMO_N=59;; 1.1*|1.2*) export HW_AMMO_N=60;; *) export HW_AMMO_N=${HW_AMMO_N:-59};; esac
 cat > /work/hwfront.py <<'PY'
 import json, os, socket, subprocess, sys, time, shlex
 players = json.loads(os.environ['PLAYERS']); hogs = int(os.environ.get('HOGS', '3')); turn = int(os.environ.get('TURN_MS', '25000'))
@@ -48,6 +50,8 @@ def send(*msgs):
     buf = b''
     for m in msgs: b = m.encode('utf-8'); buf += bytes([len(b)]) + b
     conn.sendall(buf)
+AMMO = ['93919294221991210322351110012000000002111001010111110001000', '04050405416006555465544647765766666661555101011154111111107', '00000000000002055000000400070040000000002200000006000200000', '13111103121111111231141111111111111112111111111111111111111']   # 1.0.0 defaults (59 ammo types)
+n_ammo = int(os.environ.get('HW_AMMO_N', '59'))
 colors = ['16711680', '255', '65280', '16776960']   # eaddteam <hash> <rgb int> <name> (QtFrontend: qcolor().rgb() & 0xffffff); different colours = different clans
 def config():
     c = ['TL', 'eseed {%s}' % seed, 'e$gmflags 0', 'e$damagepct 125', 'e$turntime %d' % turn, 'e$sd_turns 6', 'e$casefreq 5', 'e$minestime 3000', 'e$minesnum 4', 'e$minedudpct 0', 'e$explosives 2', 'e$airmines 0',
@@ -55,7 +59,9 @@ def config():
     # per team, exactly as HWGame::commonConfig + HWTeam::teamGameConfig send it: ammo scheme, store, then the team and its hogs
     for i, p in enumerate(players):
         name = str(p.get('name', 'Team %d' % (i + 1)))[:30]; lvl = max(1, min(5, int(p.get('level', 3))))
-        c += ['eammloadt 9391929422199121032135111131121010012110104', 'eammprob 0405040541600101021002020000011002000400010', 'eammdelay 0000000000000002055000000040070000000020000', 'eammreinf 1311110312111111102111011110000111111111111', 'eammstore',
+        # the four ammo lines must be exactly High(TAmmoType) characters for the installed engine (Hedgewars 1.0.0 = 59,
+        # QTfrontend/weapons.h AMMOLINE_DEFAULT_*); a wrong length makes eammstore fail ("Incomplete or missing ammo scheme set")
+        c += ['eammloadt ' + AMMO[0][:n_ammo].ljust(n_ammo, '0'), 'eammprob ' + AMMO[1][:n_ammo].ljust(n_ammo, '0'), 'eammdelay ' + AMMO[2][:n_ammo].ljust(n_ammo, '0'), 'eammreinf ' + AMMO[3][:n_ammo].ljust(n_ammo, '1'), 'eammstore',
               'eaddteam %032x %s %s' % (i + 1, colors[i % 4], name), 'egrave Statue', 'efort Castle', 'evoicepack Default', 'eflag hedgewars']
         for h in range(hogs): c += ['eaddhh %d 100 %s %d' % (lvl, name.split(' ')[0], h + 1), 'ehat NoHat']
     c.append('!')
