@@ -39,7 +39,13 @@ try:
     d = json.load(open('/work/logs/ikemen-stats.json')); m = (d.get('matches') or [])[-1]
     w = m.get('wins') or [0, 0]; ws = m.get('winSide')
     winner = 'draw' if w[0] == w[1] else side(ws if ws in (0, 1) else (0 if w[0] > w[1] else 1))
-    rounds = [side(r.get('winSide', r.get('winner', -1))) for r in (m.get('rounds') or [])]
+    def rwin(r):   # per round: the side whose fighter carries win=true; life left for the story
+        f = r.get('fighters') or [[], []]
+        w = 0 if any(x.get('win') for x in (f[0] or [])) else 1 if any(x.get('win') for x in (f[1] or [])) else -1
+        return side(w)
+    rounds = [rwin(r) for r in (m.get('rounds') or [])]
+    life = [[x.get('life') for x in (r.get('fighters') or [[], []])[0] or []] + [x.get('life') for x in (r.get('fighters') or [[], []])[1] or []] for r in (m.get('rounds') or [])]
+    res['life'] = life
     res.update(ok=True, winner=winner, wins=w, draws=m.get('draws', 0), rounds=rounds, lastRound=m.get('lastRound'), matchTime=m.get('matchTime'))
 except Exception as e:
     try:   # fallback: the -log table dump
