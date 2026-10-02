@@ -15,8 +15,11 @@ RUN wget -q https://dl.xonotic.org/xonotic-0.8.6.zip -O /tmp/x.zip && unzip -q /
 # VirtualGL (EGL back end: GPU rendering inside the container, under Xvfb)
 RUN wget -qO /tmp/vgl.deb https://github.com/VirtualGL/virtualgl/releases/download/3.1.1/virtualgl_3.1.1_amd64.deb \
     && apt-get update && apt-get install -y --no-install-recommends /tmp/vgl.deb && rm -rf /var/lib/apt/lists/* /tmp/vgl.deb && ls -la /usr/bin/vglrun
-# Ikemen GO (MIT engine); characters and stages must be open-licensed and are fetched at runtime if IKEMEN_ASSETS is set
-RUN mkdir -p /opt/ikemen && (curl -fsSL https://github.com/ikemen-engine/Ikemen-GO/releases/download/v0.99.0/Ikemen_GO_v0.99.0_Linux.tar.gz | tar -xz -C /opt/ikemen --strip-components=1 || echo "ikemen skipped")
+# Ikemen GO v1.0.0 (MIT engine) with its bundled open-licensed Kung Fu Man characters and stages; the release zip
+# unpacks flat (Ikemen_GO_Linux, chars/, data/, external/, font/, stages/). Extra assets are fetched at runtime if IKEMEN_ASSETS is set.
+RUN mkdir -p /opt/ikemen && wget -q https://github.com/ikemen-engine/Ikemen-GO/releases/download/v1.0.0/Ikemen_GO-v1.0.0-linux.zip -O /tmp/ik.zip \
+    && unzip -q /tmp/ik.zip -d /opt/ikemen && rm /tmp/ik.zip && chmod +x /opt/ikemen/Ikemen_GO_Linux && ls /opt/ikemen \
+    && apt-get update && apt-get install -y --no-install-recommends libopenal1 libdecor-0-0 libxrandr2 libxcursor1 libxinerama1 libxi6 libxxf86vm1 libxkbcommon0 libwayland-client0 && rm -rf /var/lib/apt/lists/*
 COPY render.sh /render.sh
 COPY games/ /games/
 RUN chmod +x /render.sh /games/*.sh
