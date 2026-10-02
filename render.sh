@@ -6,7 +6,10 @@ export DISPLAY=:99 W H FPS GAME MATCH_ID ARENA ENGINE
 mkdir -p /work/logs; LOG=/work/logs/render.log; : > $LOG
 log() { echo "$(date -u +%H:%M:%S) $*" | tee -a $LOG; }
 # ---- report logs and results to the engine (auth = the publish key) ----
-report() { curl -s -m 8 -X POST "$ENGINE/v1/stream/pod/$1" -H 'content-type: application/json' -H "x-pod-key: $PUBLISH_KEY" -d "$2" >/dev/null 2>&1 || true; }
+# periodic log posts are fire-and-forget; the FINAL log and the RESULT are retried (the engine may be mid-restart
+# or slow for a minute: an 8 s single shot lost a whole match's result once)
+report() { local tries=1 wait=15; case "$3" in final) tries=6;; esac
+  for i in $(seq 1 $tries); do curl -s -m 25 -o /dev/null -w '%{http_code}' -X POST "$ENGINE/v1/stream/pod/$1" -H 'content-type: application/json' -H "x-pod-key: $PUBLISH_KEY" -d "$2" 2>/dev/null | grep -q '^2' && return 0; [ $i -lt $tries ] && sleep $wait; done; return 1; }
 tails() { for f in render.log gpu.log glx.log game.log stk.log xonsrv.log xoncl.log hw.log ffmpeg.log xvfb.log; do [ -s /work/logs/$f ] && { echo "==> $f"; tail -c ${1:-1500} /work/logs/$f; echo; }; done; }
 logpump() { while true; do sleep 20; report log "$(jq -cn --arg id "$MATCH_ID" --arg arena "$ARENA" --arg game "$GAME" --arg tail "$(tails 1200)" '{matchId:$id,arena:$arena,game:$game,tail:$tail}')"; done; }
 # runners are fetched fresh from the repo at start (iterate without rebuilding the image); RUNNER_RAW="" disables
@@ -19,7 +22,7 @@ fetch_runner() {   # the raw CDN caches for minutes; the contents API is not cac
 }
 if [ -n "$RUNNER_RAW" ] && [ "$GAME" != test ]; then fetch_runner; chmod +x /games/$GAME.sh; fi
 logpump & LOGPUMP=$!
-finish() { local code=${1:-0}; report log "$(jq -cn --arg id "$MATCH_ID" --arg arena "$ARENA" --arg game "$GAME" --arg tail "$(tails 2500)" '{matchId:$id,arena:$arena,game:$game,tail:$tail,final:true}')"; kill $LOGPUMP 2>/dev/null; exit $code; }
+finish() { local code=${1:-0}; report log "$(jq -cn --arg id "$MATCH_ID" --arg arena "$ARENA" --arg game "$GAME" --arg tail "$(tails 2500)" '{matchId:$id,arena:$arena,game:$game,tail:$tail,final:true}')" final; kill $LOGPUMP 2>/dev/null; exit $code; }
 trap 'finish 143' TERM INT
 log "render pod · game=$GAME match=$MATCH_ID arena=$ARENA via=$VIA ${W}x${H}@${FPS}"
 nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>/dev/null | tee -a $LOG || log "no nvidia-smi"
@@ -49,10 +52,10 @@ if [ -n "$RESULT" ]; then
   BODY=$(jq -cn --arg id "$MATCH_ID" --arg arena "$ARENA" --arg game "$GAME" --argjson r "$RESULT" '{matchId:$id,arena:$arena,game:$game,result:$r}' 2>/dev/null)
   [ -z "$BODY" ] && BODY=$(jq -cn --arg id "$MATCH_ID" --arg arena "$ARENA" --arg game "$GAME" --arg raw "$RESULT" '{matchId:$id,arena:$arena,game:$game,result:{ok:false,error:"unparseable RESULT",raw:$raw[0:2000]}}')
   if [ ${#BODY} -gt 30000 ]; then BODY=$(jq -c '.result.diag = ((.result.diag // "")[0:4000])' <<< "$BODY"); fi   # the engine accepts 32 KB
-  log "result body ${#BODY} bytes"; report result "$BODY"
+  log "result body ${#BODY} bytes"; report result "$BODY" final
 fi
 sleep 3; kill $FF 2>/dev/null; wait $FF 2>/dev/null
 # never exit: RunPod restarts an exited container, which would play (and report) the match a second time; the engine
 # terminates the pod once it has the result, the janitor kills anything older than its limit
-report log "$(jq -cn --arg id "$MATCH_ID" --arg arena "$ARENA" --arg game "$GAME" --arg tail "$(tails 2500)" '{matchId:$id,arena:$arena,game:$game,tail:$tail,final:true}')"
+report log "$(jq -cn --arg id "$MATCH_ID" --arg arena "$ARENA" --arg game "$GAME" --arg tail "$(tails 2500)" '{matchId:$id,arena:$arena,game:$game,tail:$tail,final:true}')" final
 kill $LOGPUMP 2>/dev/null; log "idle until terminated"; sleep infinity
