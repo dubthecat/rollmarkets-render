@@ -36,7 +36,7 @@ p1, p2 = sys.argv[1], sys.argv[2]
 res = {'game': 'ikemen', 'ok': False, 'p1': p1, 'p2': p2}
 side = lambda v: 'p1' if v == 0 else 'p2' if v == 1 else 'draw'
 try:
-    d = json.load(open('/work/logs/ikemen-stats.json')); m = (d.get('matches') or [])[-1]
+    d = json.load(open('/work/logs/ikemen-stats.json')); d = d.get('statsLog', d); m = (d.get('matches') or [])[-1]   # getGameStatsJson wraps the log in {statsLog: {...}}
     w = m.get('wins') or [0, 0]; ws = m.get('winSide')
     winner = 'draw' if w[0] == w[1] else side(ws if ws in (0, 1) else (0 if w[0] > w[1] else 1))
     def rwin(r):   # per round: the side whose fighter carries win=true; life left for the story
