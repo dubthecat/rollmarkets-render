@@ -19,7 +19,7 @@ RUN wget -qO /tmp/vgl.deb https://github.com/VirtualGL/virtualgl/releases/downlo
 # unpacks flat (Ikemen_GO_Linux, chars/, data/, external/, font/, stages/). Extra assets are fetched at runtime if IKEMEN_ASSETS is set.
 RUN mkdir -p /opt/ikemen && wget -q https://github.com/ikemen-engine/Ikemen-GO/releases/download/v1.0.0/Ikemen_GO-v1.0.0-linux.zip -O /tmp/ik.zip \
     && unzip -q /tmp/ik.zip -d /opt/ikemen && rm /tmp/ik.zip && chmod +x /opt/ikemen/Ikemen_GO_Linux && ls /opt/ikemen \
-    && apt-get update && apt-get install -y --no-install-recommends libopenal1 libdecor-0-0 libxrandr2 libxcursor1 libxinerama1 libxi6 libxxf86vm1 libxkbcommon0 libwayland-client0 && rm -rf /var/lib/apt/lists/*
+    && apt-get update && apt-get install -y --no-install-recommends libopenal1 libgtk-3-0 libdecor-0-0 libxrandr2 libxcursor1 libxinerama1 libxi6 libxxf86vm1 libxkbcommon0 libwayland-client0 && rm -rf /var/lib/apt/lists/*
 COPY render.sh /render.sh
 COPY games/ /games/
 RUN chmod +x /render.sh /games/*.sh
