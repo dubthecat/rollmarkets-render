@@ -48,7 +48,7 @@ if [ "${AUDIO:-1}" = 1 ]; then
     AUDIO_IN="-thread_queue_size 2048 -f pulse -i game.monitor"; log "audio: pulse null sink 'game'"
   else log "audio: pulse unavailable, recording silence"; fi
 fi
-stream() { ffmpeg -hide_banner -loglevel warning -f x11grab -framerate $FPS -video_size ${W}x${H} -i :99 $AUDIO_IN -vf "drawtext=text='RollMarkets · $ARENA · $MATCH_ID':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=22:fontcolor=white:box=1:boxcolor=black@0.4:x=16:y=16" $ENC -c:a aac -ar 44100 -b:a 128k -af aresample=async=1 -shortest $OUT "$SRT_URL" >>/work/logs/ffmpeg.log 2>&1 & echo $!; }
+stream() { ffmpeg -hide_banner -loglevel warning -thread_queue_size 1024 -f x11grab -framerate $FPS -video_size ${W}x${H} -i :99 $AUDIO_IN -vf "drawtext=text='RollMarkets · $ARENA · $MATCH_ID':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=22:fontcolor=white:box=1:boxcolor=black@0.4:x=16:y=16" $ENC -c:a aac -ar 44100 -b:a 128k -af aresample=async=1 -shortest $OUT "$SRT_URL" >>/work/logs/ffmpeg.log 2>&1 & echo $!; }
 case "$GAME" in
   test) ffmpeg -hide_banner -loglevel warning -re -f lavfi -i "testsrc2=size=${W}x${H}:rate=$FPS" -f lavfi -i "sine=frequency=440" -t 900 -vf "drawtext=text='RollMarkets $ARENA $MATCH_ID %{localtime}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=36:fontcolor=white:x=40:y=40" $ENC -c:a aac $OUT "$SRT_URL"; finish 0 ;;
   supertuxkart|xonotic|hedgewars|ikemen|redeclipse) ;;
