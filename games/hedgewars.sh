@@ -39,7 +39,7 @@ run = shlex.split(os.environ.get('RUN', '')); data = sys.argv[1]
 srv = socket.socket(); srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); srv.bind(('127.0.0.1', 0)); srv.listen(1); port = srv.getsockname()[1]
 log = open('/work/logs/hwfront.log', 'a')
 def L(*a): print(time.strftime('%H:%M:%S'), *a, file=log, flush=True)
-cmd = run + [os.environ.get('HWENGINE') or 'hwengine', '--internal', '--port', str(port), '--prefix', data, '--user-prefix', '/work/hw', '--width', W, '--height', H, '--nosound', '--nomusic', '--nodampen', '--no-teamtag', '--locale', 'en.txt']
+cmd = run + [os.environ.get('HWENGINE') or 'hwengine', '--internal', '--port', str(port), '--prefix', data, '--user-prefix', '/work/hw', '--width', W, '--height', H, '--nomusic', '--nodampen', '--no-teamtag', '--locale', 'en.txt']
 L('spawn', ' '.join(cmd))
 eng = subprocess.Popen(cmd, stdout=open('/work/logs/hw.log', 'a'), stderr=subprocess.STDOUT)
 srv.settimeout(90)

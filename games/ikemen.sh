@@ -26,7 +26,7 @@ mkdir -p save; printf '[Video]\nWindowWidth = %s\nWindowHeight = %s\nFullscreen 
 grep -q 'ikemen-stats.json' external/script/main.lua || sed -i 's|^\tgame()$|\tgame()\n\tlocal __f = io.open("/work/logs/ikemen-stats.json", "w"); if __f then __f:write(getGameStatsJson()); __f:close() end|' external/script/main.lua
 echo "stats hook lines: $(grep -c 'ikemen-stats.json' external/script/main.lua) · chars: $(ls chars | tr '\n' ' ')"
 echo "fight: $P1 (ai ${AI1:-8}) vs $P2 (ai ${AI2:-8}) on $STAGE, best of ${ROUNDS:-3}, ${W:-960}x${H:-540}"
-timeout "${IKEMEN_TIMEOUT:-600}" $RUN ./Ikemen_GO_Linux -p1 "$P1" -p2 "$P2" -p1.ai "${AI1:-8}" -p2.ai "${AI2:-8}" -p1.color 1 -p2.color 2 -rounds "${ROUNDS:-3}" -s "$STAGE" -windowed -nosound -nojoy -log /work/logs/ikemen-match.log > /work/logs/ikemen.log 2>&1
+timeout "${IKEMEN_TIMEOUT:-600}" $RUN ./Ikemen_GO_Linux -p1 "$P1" -p2 "$P2" -p1.ai "${AI1:-8}" -p2.ai "${AI2:-8}" -p1.color 1 -p2.color 2 -rounds "${ROUNDS:-3}" -s "$STAGE" -windowed -nojoy -log /work/logs/ikemen-match.log > /work/logs/ikemen.log 2>&1
 echo "engine exit $?"
 echo "--- ikemen.log tail"; tail -c 2500 /work/logs/ikemen.log; echo
 [ -f /work/logs/ikemen-stats.json ] && { echo "--- stats"; head -c 1500 /work/logs/ikemen-stats.json; echo; }

@@ -65,7 +65,7 @@ defer 27 "-attack"
 connect 127.0.0.1
 CFG
 echo "X before: $(xstate)"
-timeout $((TLIMIT*60+180)) $RUN $XON/xonotic-linux64-glx -basedir $XON -userdir /work/xonc -nosound -window -width $W -height $H +seta _termsofservice_accepted 999 +seta cl_welcome 0 +exec spect.cfg >$D/xoncl.log 2>&1 &
+timeout $((TLIMIT*60+180)) $RUN $XON/xonotic-linux64-glx -basedir $XON -userdir /work/xonc -window -width $W -height $H +seta _termsofservice_accepted 999 +seta cl_welcome 0 +exec spect.cfg >$D/xoncl.log 2>&1 &
 CL=$!
 # wait for the match to end (eventlog ":end"), or for the server to die
 for i in $(seq 1 $((TLIMIT*60+150))); do grep -q "^:end" $D/xonsrv.log 2>/dev/null && { sleep 5; break; }; kill -0 $SRV 2>/dev/null || break; sleep 1; done

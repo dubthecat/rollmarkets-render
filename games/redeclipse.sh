@@ -59,7 +59,7 @@ menufps 60
 connectguidelines 1
 playername RollMarkets
 CFG
-export SDL_AUDIODRIVER=dummy
+export SDL_AUDIODRIVER=${SDL_AUDIODRIVER:-pulseaudio}
 cat > /work/rec/arena.cfg <<CFG
 mastervol 0
 musicvol 0

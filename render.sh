@@ -10,7 +10,7 @@ log() { echo "$(date -u +%H:%M:%S) $*" | tee -a $LOG; }
 # or slow for a minute: an 8 s single shot lost a whole match's result once)
 report() { local tries=1 wait=15; case "$3" in final) tries=6;; esac
   for i in $(seq 1 $tries); do curl -s -m 25 -o /dev/null -w '%{http_code}' -X POST "$ENGINE/v1/stream/pod/$1" -H 'content-type: application/json' -H "x-pod-key: $PUBLISH_KEY" -d "$2" 2>/dev/null | grep -q '^2' && return 0; [ $i -lt $tries ] && sleep $wait; done; return 1; }
-tails() { for f in render.log gpu.log glx.log game.log stk.log xonsrv.log xoncl.log hw.log ffmpeg.log xvfb.log; do [ -s /work/logs/$f ] && { echo "==> $f"; tail -c ${1:-1500} /work/logs/$f; echo; }; done; }
+tails() { for f in render.log gpu.log glx.log game.log stk.log xonsrv.log xoncl.log hw.log ffmpeg.log xvfb.log pulse.log; do [ -s /work/logs/$f ] && { echo "==> $f"; tail -c ${1:-1500} /work/logs/$f; echo; }; done; }
 logpump() { while true; do sleep 20; report log "$(jq -cn --arg id "$MATCH_ID" --arg arena "$ARENA" --arg game "$GAME" --arg tail "$(tails 1200)" '{matchId:$id,arena:$arena,game:$game,tail:$tail}')"; done; }
 # runners are fetched fresh from the repo at start (iterate without rebuilding the image); RUNNER_RAW="" disables
 : "${RUNNER_RAW:=https://raw.githubusercontent.com/dubthecat/rollmarkets-render/main}"
@@ -36,7 +36,19 @@ if command -v vglrun >/dev/null && VGL_DISPLAY=egl vglrun -d egl glxinfo -B >/wo
 export RUN
 if ffmpeg -hide_banner -encoders 2>/dev/null | grep -q h264_nvenc && nvidia-smi >/dev/null 2>&1; then ENC="-c:v h264_nvenc -preset p4 -tune ll -b:v $BITRATE -maxrate $BITRATE -bufsize 2M -g $((FPS*2))"; log "encoder: nvenc"; else ENC="-c:v libx264 -preset veryfast -tune zerolatency -b:v $BITRATE -g $((FPS*2))"; log "encoder: x264"; fi
 OUT="-f mpegts"; [ "$VIA" = rtmp ] && OUT="-f flv"
-stream() { ffmpeg -hide_banner -loglevel warning -f x11grab -framerate $FPS -video_size ${W}x${H} -i :99 -f lavfi -i anullsrc=r=44100:cl=stereo -vf "drawtext=text='RollMarkets · $ARENA · $MATCH_ID':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=22:fontcolor=white:box=1:boxcolor=black@0.4:x=16:y=16" $ENC -c:a aac -shortest $OUT "$SRT_URL" >>/work/logs/ffmpeg.log 2>&1 & echo $!; }
+# game audio: a PulseAudio null sink inside the pod; every game is pointed at it (PULSE_SINK / SDL / OpenAL) and
+# ffmpeg records the sink's monitor as the AAC track; falls back to silence if Pulse will not start
+AUDIO_IN="-f lavfi -i anullsrc=r=44100:cl=stereo"
+if [ "${AUDIO:-1}" = 1 ]; then
+  export HOME=${HOME:-/root} PULSE_SERVER=unix:/tmp/pulse.sock
+  pulseaudio --daemonize=yes --exit-idle-time=-1 --disallow-exit --log-target=file:/work/logs/pulse.log --load="module-native-protocol-unix socket=/tmp/pulse.sock auth-anonymous=1" >>/work/logs/pulse.log 2>&1 || true
+  for i in 1 2 3 4 5; do pactl info >/dev/null 2>&1 && break; sleep 1; done
+  if pactl load-module module-null-sink sink_name=game sink_properties=device.description=game >>/work/logs/pulse.log 2>&1 && pactl set-default-sink game >>/work/logs/pulse.log 2>&1; then
+    export PULSE_SINK=game SDL_AUDIODRIVER=pulseaudio ALSOFT_DRIVERS=pulse AUDIODEV=game
+    AUDIO_IN="-thread_queue_size 2048 -f pulse -i game.monitor"; log "audio: pulse null sink 'game'"
+  else log "audio: pulse unavailable, recording silence"; fi
+fi
+stream() { ffmpeg -hide_banner -loglevel warning -f x11grab -framerate $FPS -video_size ${W}x${H} -i :99 $AUDIO_IN -vf "drawtext=text='RollMarkets · $ARENA · $MATCH_ID':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=22:fontcolor=white:box=1:boxcolor=black@0.4:x=16:y=16" $ENC -c:a aac -ar 44100 -b:a 128k -af aresample=async=1 -shortest $OUT "$SRT_URL" >>/work/logs/ffmpeg.log 2>&1 & echo $!; }
 case "$GAME" in
   test) ffmpeg -hide_banner -loglevel warning -re -f lavfi -i "testsrc2=size=${W}x${H}:rate=$FPS" -f lavfi -i "sine=frequency=440" -t 900 -vf "drawtext=text='RollMarkets $ARENA $MATCH_ID %{localtime}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=36:fontcolor=white:x=40:y=40" $ENC -c:a aac $OUT "$SRT_URL"; finish 0 ;;
   supertuxkart|xonotic|hedgewars|ikemen|redeclipse) ;;
