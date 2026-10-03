@@ -55,6 +55,7 @@ cat > /work/rec/init.cfg <<CFG
 progressfps 30
 maxfps 60
 menufps 60
+connectguidelines 1
 CFG
 export SDL_AUDIODRIVER=dummy
 cat > /work/rec/arena.cfg <<CFG
@@ -63,9 +64,10 @@ musicvol 0
 soundvol 0
 specmode 1
 followthirdperson 1
-scoredump = [ echo (concatword "SCORES t" (getscoreteam 0) ":" (getscoretotal 0) " t" (getscoreteam 1) ":" (getscoretotal 1) " n=" (numscoreboard 0) "/" (numscoreboard 1) " spec=" (numspectators 0)); sleep 5000 [scoredump] ]
-sleep 5000 [spectate 1]
-sleep 8000 [scoredump]
+scoredump = [ refreshscoreboard; echo (concatword "SCORES t" (getscoreteam 0) ":" (getscoretotal 0) " t" (getscoreteam 1) ":" (getscoretotal 1) " n=" (numscoreboard 0) "/" (numscoreboard 1) " spec=" (numspectators 0)); sleep 5000 [scoredump] ]
+connectguidelines 1
+sleep 6000 [spectate 1]
+sleep 9000 [scoredump]
 connect 127.0.0.1 $PORT
 CFG
 echo "X before: $(xstate)"
