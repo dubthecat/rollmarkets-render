@@ -61,12 +61,12 @@ sleep 8000 [scoredump]
 connect 127.0.0.1 $PORT
 CFG
 echo "X before: $(xstate)"
-( cd $RE && timeout $((TLIMIT*60+240)) $RUN ./redeclipse.sh -h/work/rec -dw$W -dh$H -df0 -x"exec arena.cfg" >$D/recl.log 2>&1 ) &
+( cd $RE && timeout $((TLIMIT*60+240)) $RUN ./redeclipse.sh -h/work/rec -dw$W -dh$H -df0 -g/work/logs/recl-con.log -x"exec arena.cfg" >$D/recl.log 2>&1 ) &   # -g: the console (echo, obituaries) goes to a file as well as stdout
 CL=$!
 # wait for the match: the time limit plus a grace, or until the client or server dies; the scores keep arriving meanwhile
 for i in $(seq 1 $((TLIMIT*60+90))); do kill -0 $CL 2>/dev/null || break; kill -0 $SRV 2>/dev/null || break; sleep 1; done
 echo "X after: $(xstate)"
-LAST=$(grep -a "SCORES t" $D/recl.log | tail -1); NSCORES=$(grep -ac "SCORES t" $D/recl.log)
+cat $D/recl-con.log >> $D/recl.log 2>/dev/null; LAST=$(grep -a "SCORES t" $D/recl.log | tail -1); NSCORES=$(grep -ac "SCORES t" $D/recl.log)
 kill $CL 2>/dev/null; sleep 1; kill $SRV 2>/dev/null; sleep 1
 echo "--- resrv.log tail"; tail -c 1500 $D/resrv.log 2>/dev/null; echo; echo "--- recl.log tail"; tail -c 1500 $D/recl.log 2>/dev/null; echo
 echo "scores lines: $NSCORES · last: $LAST"
