@@ -20,6 +20,13 @@ RUN wget -qO /tmp/vgl.deb https://github.com/VirtualGL/virtualgl/releases/downlo
 RUN mkdir -p /opt/ikemen && wget -q https://github.com/ikemen-engine/Ikemen-GO/releases/download/v1.0.0/Ikemen_GO-v1.0.0-linux.zip -O /tmp/ik.zip \
     && unzip -q /tmp/ik.zip -d /opt/ikemen && rm /tmp/ik.zip && chmod +x /opt/ikemen/Ikemen_GO_Linux && ls /opt/ikemen \
     && apt-get update && apt-get install -y --no-install-recommends libopenal1 libgtk-3-0 libdecor-0-0 libxrandr2 libxcursor1 libxinerama1 libxi6 libxxf86vm1 libxkbcommon0 libwayland-client0 && rm -rf /var/lib/apt/lists/*
+# Red Eclipse 2.0.0 "Jupiter" (zlib engine, CC assets): Linux client + dedicated server + data from the GitHub release
+# (bz2 tarball, ~0.9 GB; the bundled SDL/ENet libs live in bin/amd64 and the launchers set LD_LIBRARY_PATH)
+RUN wget -q https://github.com/redeclipse/base/releases/download/v2.0.0/redeclipse_2.0.0_nix.tar.bz2 -O /tmp/re.tar.bz2 \
+    && mkdir -p /tmp/re && tar -xjf /tmp/re.tar.bz2 -C /tmp/re && rm /tmp/re.tar.bz2 \
+    && d=$(find /tmp/re -maxdepth 3 -name redeclipse.sh -printf '%h\n' | head -1) && mv "$d" /opt/redeclipse && rm -rf /tmp/re \
+    && chmod +x /opt/redeclipse/*.sh /opt/redeclipse/bin/amd64/* 2>/dev/null; ls /opt/redeclipse; ls /opt/redeclipse/bin/amd64 \
+    && apt-get update && apt-get install -y --no-install-recommends libsdl2-image-2.0-0 libsdl2-mixer-2.0-0 libopenal1 && rm -rf /var/lib/apt/lists/*
 COPY render.sh /render.sh
 COPY games/ /games/
 RUN chmod +x /render.sh /games/*.sh

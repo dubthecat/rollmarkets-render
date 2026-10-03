@@ -39,7 +39,7 @@ OUT="-f mpegts"; [ "$VIA" = rtmp ] && OUT="-f flv"
 stream() { ffmpeg -hide_banner -loglevel warning -f x11grab -framerate $FPS -video_size ${W}x${H} -i :99 -f lavfi -i anullsrc=r=44100:cl=stereo -vf "drawtext=text='RollMarkets · $ARENA · $MATCH_ID':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=22:fontcolor=white:box=1:boxcolor=black@0.4:x=16:y=16" $ENC -c:a aac -shortest $OUT "$SRT_URL" >>/work/logs/ffmpeg.log 2>&1 & echo $!; }
 case "$GAME" in
   test) ffmpeg -hide_banner -loglevel warning -re -f lavfi -i "testsrc2=size=${W}x${H}:rate=$FPS" -f lavfi -i "sine=frequency=440" -t 900 -vf "drawtext=text='RollMarkets $ARENA $MATCH_ID %{localtime}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=36:fontcolor=white:x=40:y=40" $ENC -c:a aac $OUT "$SRT_URL"; finish 0 ;;
-  supertuxkart|xonotic|hedgewars|ikemen) ;;
+  supertuxkart|xonotic|hedgewars|ikemen|redeclipse) ;;
   *) log "unknown game $GAME"; finish 2 ;;
 esac
 FF=$(stream); log "streaming (ffmpeg pid $FF)"
