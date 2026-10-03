@@ -66,7 +66,7 @@ musicvol 0
 soundvol 0
 specmode 1
 followthirdperson 1
-scoredump = [ refreshscoreboard; echo (concatword "SCORES t" (getscoreteam 0) ":" (getscoretotal 0) " t" (getscoreteam 1) ":" (getscoretotal 1) " n=" (numscoreboard 0) "/" (numscoreboard 1) " spec=" (numspectators 0) " tr=" (gametimeremain) " im=" (intermission)); sleep 5000 [scoredump] ]
+scoredump = [ refreshscoreboard; echo (concatword "SCORES t" (getscoreteam 0) ":" (getscoretotal 0) " t" (getscoreteam 1) ":" (getscoretotal 1) " n=" (numscoreboard 0) "/" (numscoreboard 1) " spec=" (numspectators 0) ); sleep 5000 [scoredump] ]
 connectguidelines 1
 sleep 6000 [spectate 1]
 sleep 7000 [setpriv rollmarkets-arena]
@@ -81,7 +81,9 @@ echo "X before: $(xstate)"
 ( cd $RE && LD_LIBRARY_PATH=$RE/bin/amd64:${LD_LIBRARY_PATH:-} timeout $((TLIMIT*60+240)) $RUN ./bin/amd64/redeclipse_linux -h/work/rec -dw$W -dh$H -df0 -g/work/logs/recl-con.log "-xexec arena.cfg" >$D/recl.log 2>&1 ) &   # -g: the console (echo, obituaries) goes to a file as well as stdout
 CL=$!
 # wait for the match: the time limit plus a grace, or until the client or server dies; the scores keep arriving meanwhile
-for i in $(seq 1 $((TLIMIT*60+150))); do kill -0 $CL 2>/dev/null || break; kill -0 $SRV 2>/dev/null || break; [ $i -gt 75 ] && grep -aq "im=1" $D/recl-con.log 2>/dev/null && { echo "intermission at ${i}s"; sleep 6; break; }; sleep 1; done
+# the end of OUR game is the server writing its demo ("Demo Deathmatch on <map> recorded"), which happens as the next map loads;
+# the client is stopped right then so the last SCORES line still belongs to the finished game
+for i in $(seq 1 $((TLIMIT*60+150))); do kill -0 $CL 2>/dev/null || break; kill -0 $SRV 2>/dev/null || break; [ $i -gt 40 ] && grep -aq "forced: Deathmatch on $MAP" $D/resrv.log 2>/dev/null && grep -aq "Demo Deathmatch on $MAP recorded" $D/resrv.log 2>/dev/null && { echo "game over at ${i}s"; break; }; sleep 1; done
 echo "X after: $(xstate)"
 cat $D/recl-con.log >> $D/recl.log 2>/dev/null; LAST=$(grep -a "SCORES t" $D/recl.log | tail -1); NSCORES=$(grep -ac "SCORES t" $D/recl.log)
 kill $CL 2>/dev/null; sleep 1; kill $SRV 2>/dev/null; sleep 1
