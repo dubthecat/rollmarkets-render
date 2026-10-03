@@ -32,23 +32,31 @@ cat > /work/re/servinit.cfg <<CFG
 servertype 1
 serverip 127.0.0.1
 serverport $PORT
-serverclients 8
-serverspectators 2
-defaultmode 2
-defaultmuts 0
-timelimit $TLIMIT
-overtimelimit 0
-botlimit $BOTS
-botbalance $BOTS
-botskillmin $SMIN
-botskillmax $SMAX
+sv_serverclients 8
+sv_serverspectators 2
+sv_defaultmode 2
+sv_defaultmuts 0
+sv_timelimit $TLIMIT
+sv_overtimelimit 0
+sv_botlimit $BOTS
+sv_botbalance $BOTS
+sv_botskillmin $SMIN
+sv_botskillmax $SMAX
 verbose 2
 CFG
 cp /work/re/servinit.cfg /work/re/localinit.cfg   # a non-dedicated servertype execs localinit.cfg; servinit.cfg is read first either way
 ( cd $RE && ./redeclipse_server.sh -h/work/re -g/work/logs/resrv.log -v2 >$D/resrv-out.log 2>&1 ) &
 SRV=$!; sleep 10
 echo "server alive: $(kill -0 $SRV 2>/dev/null && echo yes || echo NO) · $(tail -c 300 $D/resrv.log 2>/dev/null | tr '\n' ' ')"
-# spectator client: silent, windowed at the capture size, joins as spectator, TV camera, dumps team scores every 5 s
+# spectator client: silent, windowed at the capture size, joins as spectator, TV camera, dumps team scores every 5 s.
+# init.cfg is executed before the display exists: Xvfb reports 0 Hz and the loading screen divides by the refresh
+# rate unless progressfps/maxfps are pinned (SIGFPE in "Loading world..")
+cat > /work/rec/init.cfg <<CFG
+progressfps 30
+maxfps 60
+menufps 60
+CFG
+export SDL_AUDIODRIVER=dummy
 cat > /work/rec/arena.cfg <<CFG
 mastervol 0
 musicvol 0
