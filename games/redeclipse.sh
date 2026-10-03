@@ -18,7 +18,7 @@ xstate() { echo "xvfb alive: $(pgrep -c Xvfb) · xdpyinfo: $(xdpyinfo -display :
 # (specmode 1) whose window is captured. Team scores come from the client's own scoreboard, echoed to its console
 # every 5 s as "SCORES" lines; the last line before the end is the result. $PLAYERS: [{name, team:"alpha"|"omega", skill 1-100}]
 PLAYERS=${PLAYERS:-'[{"name":"Eclipse rusher","team":"alpha","skill":85},{"name":"Eclipse warden","team":"omega","skill":65}]'}
-TLIMIT=${TLIMIT:-4}; BOTS=${BOTS:-6}; RE=${RE:-/opt/redeclipse}; PORT=28801
+TLIMIT=${TLIMIT:-4}; BOTS=${BOTS:-6}; RE=${RE:-/opt/redeclipse}; PORT=28801; MAP=${MAP:-octavus}   # the server picks FFA for its first game; the admin spectator restarts it as team deathmatch on a fixed map
 read -r SMIN SMAX < <(python3 -c "
 import json, os
 p = json.loads(os.environ.get('PLAYERS') or '[]'); sk = [int(x.get('skill', 70)) for x in p if isinstance(x, dict)] or [70]
@@ -66,12 +66,14 @@ musicvol 0
 soundvol 0
 specmode 1
 followthirdperson 1
-scoredump = [ refreshscoreboard; echo (concatword "SCORES t" (getscoreteam 0) ":" (getscoretotal 0) " t" (getscoreteam 1) ":" (getscoretotal 1) " n=" (numscoreboard 0) "/" (numscoreboard 1) " spec=" (numspectators 0) " tr=" \$gametimeremain " im=" \$intermission); sleep 5000 [scoredump] ]
+scoredump = [ refreshscoreboard; echo (concatword "SCORES t" (getscoreteam 0) ":" (getscoretotal 0) " t" (getscoreteam 1) ":" (getscoretotal 1) " n=" (numscoreboard 0) "/" (numscoreboard 1) " spec=" (numspectators 0) " tr=" (gametimeremain) " im=" (intermission)); sleep 5000 [scoredump] ]
 connectguidelines 1
 sleep 6000 [spectate 1]
 sleep 7000 [setpriv rollmarkets-arena]
-sleep 9000 [sv_timelimit $TLIMIT; sv_overtimeallow 0]
-sleep 11000 [scoredump]
+sleep 9000 [sv_timelimit $TLIMIT; sv_overtimeallow 0; sv_defaultmode 2; sv_defaultmuts 0]
+sleep 11000 [mode 2 0; map $MAP]
+sleep 16000 [spectate 1]
+sleep 18000 [scoredump]
 connect 127.0.0.1 $PORT
 CFG
 echo "X before: $(xstate)"
@@ -79,7 +81,7 @@ echo "X before: $(xstate)"
 ( cd $RE && LD_LIBRARY_PATH=$RE/bin/amd64:${LD_LIBRARY_PATH:-} timeout $((TLIMIT*60+240)) $RUN ./bin/amd64/redeclipse_linux -h/work/rec -dw$W -dh$H -df0 -g/work/logs/recl-con.log "-xexec arena.cfg" >$D/recl.log 2>&1 ) &   # -g: the console (echo, obituaries) goes to a file as well as stdout
 CL=$!
 # wait for the match: the time limit plus a grace, or until the client or server dies; the scores keep arriving meanwhile
-for i in $(seq 1 $((TLIMIT*60+150))); do kill -0 $CL 2>/dev/null || break; kill -0 $SRV 2>/dev/null || break; [ $i -gt 60 ] && grep -aq "im=1" $D/recl-con.log 2>/dev/null && { echo "intermission at ${i}s"; sleep 6; break; }; sleep 1; done
+for i in $(seq 1 $((TLIMIT*60+150))); do kill -0 $CL 2>/dev/null || break; kill -0 $SRV 2>/dev/null || break; [ $i -gt 75 ] && grep -aq "im=1" $D/recl-con.log 2>/dev/null && { echo "intermission at ${i}s"; sleep 6; break; }; sleep 1; done
 echo "X after: $(xstate)"
 cat $D/recl-con.log >> $D/recl.log 2>/dev/null; LAST=$(grep -a "SCORES t" $D/recl.log | tail -1); NSCORES=$(grep -ac "SCORES t" $D/recl.log)
 kill $CL 2>/dev/null; sleep 1; kill $SRV 2>/dev/null; sleep 1
