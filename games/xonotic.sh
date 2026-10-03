@@ -65,6 +65,8 @@ defer 27 "-attack"
 connect 127.0.0.1
 CFG
 echo "X before: $(xstate)"
+# audio probe one minute into the match: is the game connected to the PulseAudio null sink? (goes into the RESULT diag)
+( sleep 60; { echo "== audio probe $(date -u +%T)"; pactl list short sinks 2>&1; echo "-- sink-inputs (the game's streams)"; pactl list short sink-inputs 2>&1; echo "-- clients"; pactl list short clients 2>&1 | head -8; env | grep -E "^(PULSE_SERVER|PULSE_SINK|SDL_AUDIODRIVER|ALSOFT_DRIVERS|AUDIODEV)="; } > $D/audio.log 2>&1 ) &
 timeout $((TLIMIT*60+180)) $RUN $XON/xonotic-linux64-glx -basedir $XON -userdir /work/xonc -window -width $W -height $H +seta _termsofservice_accepted 999 +seta cl_welcome 0 +exec spect.cfg >$D/xoncl.log 2>&1 &
 CL=$!
 # wait for the match to end (eventlog ":end"), or for the server to die
@@ -92,5 +94,5 @@ out = [{'name': re.sub(r'\^\d|\^x[0-9a-fA-F]{3}', '', name[s]), 'team': tm(team.
 out.sort(key=lambda p: -p['frags']); print(json.dumps(out))
 PY
 )
-DIAG=$( { echo "== runner"; md5sum /games/xonotic.sh | cut -c1-8; head -14 $D/render.log; echo "== gpu"; cat $D/gpu.log; echo "== dir"; cat $D/xon-ls.log; echo "== X"; grep -E "^X (before|after)" $D/game.log 2>/dev/null; echo "== server head"; head -25 $D/xonsrv.log; echo "== gamestart"; grep -a "^:gamestart:" $D/xonsrv.log | head -3; echo "== server key"; grep -aiE "^:(end|teamscores|player|gamestart)|bot_|error|cannot|fail|gametype" $D/xonsrv.log | tail -60; echo "== client head"; head -20 $D/xoncl.log; echo "== client key"; grep -iE "error|fail|cannot|renderer|opengl|connect|spectat|video" $D/xoncl.log | tail -30; echo "== client tail"; tail -12 $D/xoncl.log; } 2>/dev/null | cut -c1-220 | head -c 14000 )
+DIAG=$( { echo "== audio"; cat $D/audio.log 2>/dev/null; grep -ai "snd\|openal\|audio\|sound" $D/xoncl.log 2>/dev/null | head -6; echo "== runner"; md5sum /games/xonotic.sh | cut -c1-8; head -14 $D/render.log; echo "== gpu"; cat $D/gpu.log; echo "== dir"; cat $D/xon-ls.log; echo "== X"; grep -E "^X (before|after)" $D/game.log 2>/dev/null; echo "== server head"; head -25 $D/xonsrv.log; echo "== gamestart"; grep -a "^:gamestart:" $D/xonsrv.log | head -3; echo "== server key"; grep -aiE "^:(end|teamscores|player|gamestart)|bot_|error|cannot|fail|gametype" $D/xonsrv.log | tail -60; echo "== client head"; head -20 $D/xoncl.log; echo "== client key"; grep -iE "error|fail|cannot|renderer|opengl|connect|spectat|video" $D/xoncl.log | tail -30; echo "== client tail"; tail -12 $D/xoncl.log; } 2>/dev/null | cut -c1-220 | head -c 14000 )
 echo "RESULT $(jq -cn --arg red "${RED:-}" --arg blue "${BLUE:-}" --arg map "$MAP" --argjson players "${PLAYERS_OUT:-[]}" --arg diag "$DIAG" '{game:"xonotic",frags:{red:($red|tonumber? // null),blue:($blue|tonumber? // null)},players:$players,map:$map,ok:(($red|length)>0 and ($blue|length)>0),diag:$diag}')"

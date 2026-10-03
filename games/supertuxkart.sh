@@ -36,6 +36,8 @@ rows.sort(); print(json.dumps([r[1] for r in rows]) if rows else 'null')
 PY
 }
 echo "X before: $(xstate)"
+# audio probe one minute into the match: is the game connected to the PulseAudio null sink? (goes into the RESULT diag)
+( sleep 60; { echo "== audio probe $(date -u +%T)"; pactl list short sinks 2>&1; echo "-- sink-inputs (the game's streams)"; pactl list short sink-inputs 2>&1; echo "-- clients"; pactl list short clients 2>&1 | head -8; env | grep -E "^(PULSE_SERVER|PULSE_SINK|SDL_AUDIODRIVER|ALSOFT_DRIVERS|AUDIODEV)="; } > $D/audio.log 2>&1 ) &
 timeout 600 $RUN supertuxkart --log=1 --windowed --screensize=${W}x${H} --no-start-screen --track=$TRACK --kart=$FIRST --ai=$REST --numkarts=$N --laps=$LAPS --profile-laps=$LAPS --difficulty=2 >$D/stk.log 2>&1 &
 STK=$!
 # profile mode quits after the race; stop waiting as soon as the result table is logged (or the timeout hits)
@@ -45,5 +47,5 @@ kill $STK 2>/dev/null; sleep 1
 echo "--- stk.log head"; head -30 $D/stk.log; echo "--- stk.log race lines"; grep -iE "profile|finish|position|result|rank|error|warn|renderer|opengl|shader|gl_version|loading|track|camera|fatal|Unable" $D/stk.log | head -60
 ORDER=$(parse_order)
 [ "$ORDER" = "[]" ] || [ -z "$ORDER" ] && ORDER=null
-DIAG=$( { echo "== runner"; md5sum /games/supertuxkart.sh | cut -c1-8; head -14 $D/render.log; echo "== profile lines"; grep -a "profile:" $D/stk.log | tail -8; echo "== gpu"; cat $D/gpu.log; echo "== glx"; head -8 $D/glx2.log 2>/dev/null; echo "== X"; grep -E "^X (before|after)" $D/game.log 2>/dev/null; echo "== stk.log head"; head -40 $D/stk.log; echo "== stk.log key lines"; grep -iE "profile|finish|position|error|warn|renderer|opengl|version|loading|track|camera|fatal|Unable" $D/stk.log | head -50; echo "== stk.log tail"; tail -20 $D/stk.log; } 2>/dev/null | cut -c1-220 | head -c 14000 )
+DIAG=$( { echo "== audio"; cat $D/audio.log 2>/dev/null; grep -ai "sfx\|openal\|sound\|music" $D/stk.log | head -6; echo "== runner"; md5sum /games/supertuxkart.sh | cut -c1-8; head -14 $D/render.log; echo "== profile lines"; grep -a "profile:" $D/stk.log | tail -8; echo "== gpu"; cat $D/gpu.log; echo "== glx"; head -8 $D/glx2.log 2>/dev/null; echo "== X"; grep -E "^X (before|after)" $D/game.log 2>/dev/null; echo "== stk.log head"; head -40 $D/stk.log; echo "== stk.log key lines"; grep -iE "profile|finish|position|error|warn|renderer|opengl|version|loading|track|camera|fatal|Unable" $D/stk.log | head -50; echo "== stk.log tail"; tail -20 $D/stk.log; } 2>/dev/null | cut -c1-220 | head -c 14000 )
 echo "RESULT $(jq -cn --argjson order "$ORDER" --arg track "$TRACK" --arg diag "$DIAG" '{game:"supertuxkart",order:$order,track:$track,ok:($order!=null),diag:$diag}')"
