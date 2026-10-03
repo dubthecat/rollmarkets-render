@@ -44,6 +44,7 @@ botskillmin $SMIN
 botskillmax $SMAX
 verbose 2
 CFG
+cp /work/re/servinit.cfg /work/re/localinit.cfg   # a non-dedicated servertype execs localinit.cfg; servinit.cfg is read first either way
 ( cd $RE && ./redeclipse_server.sh -h/work/re -g/work/logs/resrv.log -v2 >$D/resrv-out.log 2>&1 ) &
 SRV=$!; sleep 10
 echo "server alive: $(kill -0 $SRV 2>/dev/null && echo yes || echo NO) · $(tail -c 300 $D/resrv.log 2>/dev/null | tr '\n' ' ')"
