@@ -86,7 +86,7 @@ try:
     txt = open(log, errors='replace').read(); txt = re.sub(r'\f[sS]|\f[a-zA-Z0-9]', '', txt)
     kills = {}
     for line in txt.split('\n'):
-        mm = re.match(r'^\s*(\S.{0,30}?) (?:fragged|killed|sprayed|gunned down|obliterated|gibbed|splattered) (\S.{0,30}?)\s*$', line)
+        mm = re.search(r'(\S.{0,30}?) (?:fragged|killed|sprayed|gunned down|obliterated|gibbed|splattered) (\S.{0,30}?)\s*$', line)   # console lines may carry a time prefix
         if mm: kills[mm.group(1).strip()] = kills.get(mm.group(1).strip(), 0) + 1
     if kills: res['players'] = dict(sorted(kills.items(), key=lambda kv: -kv[1])[:12])
 except Exception as e: res['parseNote'] = str(e)[:80]
