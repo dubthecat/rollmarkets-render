@@ -69,7 +69,8 @@ sleep 8000 [scoredump]
 connect 127.0.0.1 $PORT
 CFG
 echo "X before: $(xstate)"
-( cd $RE && timeout $((TLIMIT*60+240)) $RUN ./redeclipse.sh -h/work/rec -dw$W -dh$H -df0 -g/work/logs/recl-con.log -x"exec arena.cfg" >$D/recl.log 2>&1 ) &   # -g: the console (echo, obituaries) goes to a file as well as stdout
+# the launcher word-splits its arguments (so "-xexec arena.cfg" became "-xexec"): run the binary directly, like the launcher does
+( cd $RE && LD_LIBRARY_PATH=$RE/bin/amd64:${LD_LIBRARY_PATH:-} timeout $((TLIMIT*60+240)) $RUN ./bin/amd64/redeclipse_linux -h/work/rec -dw$W -dh$H -df0 -g/work/logs/recl-con.log "-xexec arena.cfg" >$D/recl.log 2>&1 ) &   # -g: the console (echo, obituaries) goes to a file as well as stdout
 CL=$!
 # wait for the match: the time limit plus a grace, or until the client or server dies; the scores keep arriving meanwhile
 for i in $(seq 1 $((TLIMIT*60+90))); do kill -0 $CL 2>/dev/null || break; kill -0 $SRV 2>/dev/null || break; sleep 1; done
