@@ -66,7 +66,7 @@ musicvol 0
 soundvol 0
 specmode 1
 followthirdperson 1
-scoredump = [ refreshscoreboard; echo (concatword "SCORES t" (getscoreteam 0) ":" (getscoretotal 0) " t" (getscoreteam 1) ":" (getscoretotal 1) " n=" (numscoreboard 0) "/" (numscoreboard 1) " spec=" (numspectators 0) " tr=" $gametimeremain " im=" $intermission); sleep 5000 [scoredump] ]
+scoredump = [ refreshscoreboard; echo (concatword "SCORES t" (getscoreteam 0) ":" (getscoretotal 0) " t" (getscoreteam 1) ":" (getscoretotal 1) " n=" (numscoreboard 0) "/" (numscoreboard 1) " spec=" (numspectators 0) " tr=" \$gametimeremain " im=" \$intermission); sleep 5000 [scoredump] ]
 connectguidelines 1
 sleep 6000 [spectate 1]
 sleep 7000 [setpriv rollmarkets-arena]
