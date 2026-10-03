@@ -22,7 +22,8 @@ RUN mkdir -p /opt/ikemen && wget -q https://github.com/ikemen-engine/Ikemen-GO/r
     && apt-get update && apt-get install -y --no-install-recommends libopenal1 libgtk-3-0 libdecor-0-0 libxrandr2 libxcursor1 libxinerama1 libxi6 libxxf86vm1 libxkbcommon0 libwayland-client0 && rm -rf /var/lib/apt/lists/*
 # Red Eclipse 2.0.0 "Jupiter" (zlib engine, CC assets): Linux client + dedicated server + data from the GitHub release
 # (bz2 tarball, ~0.9 GB; the bundled SDL/ENet libs live in bin/amd64 and the launchers set LD_LIBRARY_PATH)
-RUN wget -q https://github.com/redeclipse/base/releases/download/v2.0.0/redeclipse_2.0.0_nix.tar.bz2 -O /tmp/re.tar.bz2 \
+RUN apt-get update && apt-get install -y --no-install-recommends bzip2 && rm -rf /var/lib/apt/lists/* \
+    && wget -q https://github.com/redeclipse/base/releases/download/v2.0.0/redeclipse_2.0.0_nix.tar.bz2 -O /tmp/re.tar.bz2 \
     && mkdir -p /tmp/re && tar -xjf /tmp/re.tar.bz2 -C /tmp/re && rm /tmp/re.tar.bz2 \
     && d=$(find /tmp/re -maxdepth 3 -name redeclipse.sh -printf '%h\n' | head -1) && mv "$d" /opt/redeclipse && rm -rf /tmp/re \
     && chmod +x /opt/redeclipse/*.sh /opt/redeclipse/bin/amd64/* 2>/dev/null; ls /opt/redeclipse; ls /opt/redeclipse/bin/amd64 \
